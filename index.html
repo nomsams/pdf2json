@@ -67,6 +67,7 @@
       margin: 0 auto;
       width: 100%;
       position: relative; 
+      padding-bottom: 220px; /* Space for logs */
     }
     
     .col { display: flex; flex-direction: column; gap: 15px; min-height: 0; z-index: 2; }
@@ -272,7 +273,7 @@
 
       <div>
         <label>Prompt Instruction</label>
-        <textarea id="groqPrompt" style="height:60px">Output a JSON according to the schema. Preserve {{IMG:...}} placeholders exactly.</textarea>
+        <textarea id="groqPrompt" style="height:120px">Output a json using the text provided while modeling the json according to the json schema provided. That is create a json according to json schema and populate with the text from the text provided. Most text is in chronologial order. !IMPORTATN make sure not to summarize anything !IMPORTANT keep the image placeholder tags in exactly the same form/name and in the same place / order as in the original text compared ot the rest of the json structure !IMPORTANT accuracy is very important</textarea>
       </div>
 
       <button id="btnStep2" class="primary" style="width:100%" disabled>Run Structuring</button>
@@ -721,7 +722,7 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
       const pageImages = validAssets.filter(a => a.page === i);
       if(pageImages.length) {
         pageMd += "\n\n";
-        pageImages.forEach(img => pageMd += `\n${CONFIG.phPrefix}${img.id}${CONFIG.phSuffix}`);
+        pageImages.forEach(img => pageMd += `\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}`);
       }
     } else {
       // Smart Interleaving
@@ -795,7 +796,7 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   let md = "";
   combined.forEach(node => {
     if(node.type === 'image') {
-      md += `\n\n${CONFIG.phPrefix}${node.data.id}${CONFIG.phSuffix}\n\n`;
+      md += `\n\n${CONFIG.phPrefix}${node.data.id}|W:${node.data.width}|H:${node.data.height}${CONFIG.phSuffix}\n\n`;
     } else {
       // Convert block items to string (simplified layout analysis)
       const blockText = simpleBlockToText(node.data.items);
@@ -964,7 +965,7 @@ function injectPlaceholdersSimple(text, skipCount) {
       output += `\n<!-- Page ${a.page} Images -->\n`;
       curPage = a.page;
     }
-    output += `\n${CONFIG.phPrefix}${a.id}${CONFIG.phSuffix}`;
+    output += `\n${CONFIG.phPrefix}${a.id}|W:${a.width}|H:${a.height}${CONFIG.phSuffix}`;
   });
   return output;
 }
@@ -1066,19 +1067,16 @@ ui.btn3.addEventListener('click', async () => {
     const processNode = async (node) => {
       if (typeof node === 'string') {
         if(node.startsWith(CONFIG.phPrefix) && node.endsWith(CONFIG.phSuffix)) {
-          const id = node.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '');
+          // Extract ID from {{IMG:id|W:..|H:..}}
+          const parts = node.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|');
+          const id = parts[0];
+          
           const asset = state.assets.find(a => a.id === id);
           if(asset) {
             usedImageIds.add(id);
             const b64 = await compressImage(asset.blob, compress, quality, maxW);
-            return {
-              type: 'image',
-              src: b64,
-              width: dispW,
-              description: '',
-              compressionImmune: false,
-              centering: 'default'
-            };
+            // Return RAW Base64 string as requested
+            return b64;
           }
         }
         return node;
@@ -1119,6 +1117,7 @@ ui.btn3.addEventListener('click', async () => {
 
       for(const asset of unusedAssets) {
         const b64 = await compressImage(asset.blob, compress, quality, maxW);
+        // Use Full Object Structure for Fallback
         targetArray.push({
           type: 'image',
           src: b64,
