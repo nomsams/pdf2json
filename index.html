@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>PDF Flow • Local & AI Hybrid</title>
+
+  <!-- ====== External Libraries ====== -->
+  <!-- PDF.js (Version 2.16 for better compatibility) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script>
+    (function ensurePdfjsReady(){
+      const lib = window.pdfjsLib;
+      if (!lib) return setTimeout(ensurePdfjsReady, 30);
+      lib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+    })();
+  </script>
+  <!-- Tesseract.js for Local OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+
+  <!-- ====== Styles ====== -->
+  <style>
+    :root {
+      --bg: #0f1115; --panel: #151923; --muted: #232836; --muted-2: #2b3244; 
+      --text: #e6e6e6; --text-dim: #9aa3b6; --accent: #62d0ff; 
+      --ok: #30d158; --warn: #ffcc00; --err: #ff453a; 
+      --line: #1e2431; --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --node: #1a2030; --pipe: #2d3346; --pipe-active: #62d0ff;
+    }
+    [data-theme="light"] {
+      --bg: #f0f2f5; --panel: #ffffff; --muted: #dce3eb; --muted-2: #eef2f6;
+      --text: #1a202c; --text-dim: #64748b; --accent: #2563eb;
+      --ok: #059669; --warn: #d97706; --err: #dc2626;
+      --line: #e2e8f0; --shadow: 0 4px 12px rgba(0,0,0,.05);
+      --node: #ffffff; --pipe: #cbd5e1; --pipe-active: #2563eb;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+    
+    /* Header */
+    header { height: 56px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10; box-shadow: var(--shadow); }
+    h1 { font-size: 16px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+    .badge { background: var(--accent); color: #000; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+    
+    /* Layout */
+    main { flex: 1; display: grid; grid-template-columns: 380px 1fr 380px; gap: 20px; padding: 20px; overflow-x: auto; overflow-y: hidden; position: relative; }
+    .col { display: flex; flex-direction: column; gap: 15px; min-height: 0; z-index: 2; }
+    
+    /* Cards */
+    .card { background: var(--panel); border: 1px solid var(--muted); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; position: relative; transition: border-color 0.3s; }
+    .card:hover { border-color: var(--muted-2); }
+    .card-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
+    .card-title { font-weight: 600; font-size: 14px; color: var(--accent); }
+    
+    /* Inputs */
+    label { font-size: 12px; font-weight: 600; color: var(--text-dim); display: block; margin-bottom: 4px; }
+    input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--muted); color: var(--text); padding: 8px; border-radius: 6px; font-family: inherit; font-size: 13px; outline: none; transition: 0.2s; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; font-family: monospace; }
+    
+    /* Buttons */
+    .btn-row { display: flex; gap: 8px; margin-top: 4px; }
+    button { flex: 1; background: var(--muted-2); border: 1px solid var(--muted); color: var(--text); padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.2s; }
+    button:hover { border-color: var(--accent); color: var(--accent); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+    button.primary { background: var(--accent); color: #090b10; border: none; }
+    button.primary:hover { filter: brightness(1.1); color: #000; }
+    
+    /* Visual Pipes */
+    .pipes-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+    .pipe { position: absolute; height: 4px; background: var(--pipe); transition: background 0.5s, width 0.5s; border-radius: 2px; }
+    .pipe.active { background: var(--pipe-active); box-shadow: 0 0 10px var(--pipe-active); }
+    #pipe1 { top: 180px; left: 380px; width: 40px; } 
+    #pipe2 { top: 180px; right: 380px; width: 40px; }
+
+    /* Drop Zone */
+    .drop { border: 2px dashed var(--muted); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
+    .drop:hover, .drop.drag { border-color: var(--accent); background: rgba(98, 208, 255, 0.05); }
+    
+    /* Progress */
+    .progress-wrap { height: 4px; background: var(--muted); border-radius: 2px; overflow: hidden; margin-top: 5px; }
+    .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+    .status { font-size: 11px; color: var(--text-dim); margin-top: 4px; display: flex; justify-content: space-between; }
+    
+    /* Previews */
+    .preview-box { background: var(--bg); border: 1px solid var(--muted); border-radius: 6px; padding: 10px; overflow: auto; max-height: 200px; font-family: monospace; font-size: 11px; white-space: pre-wrap; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 4px; max-height: 150px; overflow-y: auto; padding: 4px; }
+    .thumb { aspect-ratio: 1; background: #000; border-radius: 4px; overflow: hidden; border: 1px solid var(--muted); position: relative; }
+    .thumb img { width: 100%; height: 100%; object-fit: contain; }
+    .thumb span { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: #fff; font-size: 9px; padding: 1px 3px; }
+
+    /* Logs */
+    #logs { position: fixed; bottom: 0; left: 0; right: 0; height: 150px; background: var(--panel); border-top: 1px solid var(--line); z-index: 20; display: flex; flex-direction: column; transition: transform 0.3s; }
+    #logs.minimized { transform: translateY(115px); }
+    .log-head { padding: 8px 20px; background: var(--muted-2); font-size: 12px; font-weight: 700; display: flex; justify-content: space-between; cursor: pointer; }
+    .log-body { flex: 1; overflow-y: auto; padding: 10px; font-family: monospace; font-size: 12px; color: var(--text-dim); }
+    .log-entry { margin-bottom: 4px; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+    .log-entry.ERR { color: var(--err); }
+    .log-entry.SUCCESS { color: var(--ok); }
+    .log-entry.WARN { color: var(--warn); }
+
+    /* Toggle Switch */
+    .switch { position: relative; width: 36px; height: 20px; background: var(--muted); border-radius: 20px; cursor: pointer; transition: 0.3s; }
+    .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: 0.3s; }
+    .switch.on { background: var(--accent); }
+    .switch.on::after { transform: translateX(16px); }
+
+    .hidden { display: none !important; }
+    .settings-group { padding: 8px; background: var(--bg); border-radius: 6px; border: 1px solid var(--line); margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span>PDF Flow</span> <span class="badge">Hybrid</span></h1>
+  <div style="display:flex; gap:15px; align-items:center;">
+    <div style="font-size:12px; color:var(--text-dim)">Dark Mode</div>
+    <div id="themeToggle" class="switch on"></div>
+  </div>
+</header>
+
+<main>
+  <!-- Visual Pipes -->
+  <div class="pipes-layer">
+    <div id="pipe1" class="pipe"></div>
+    <div id="pipe2" class="pipe"></div>
+  </div>
+
+  <!-- COLUMN 1: PDF & OCR -->
+  <div class="col">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">1. Input & Extraction</span>
+        <span class="badge">Local / DeepSeek</span>
+      </div>
+      
+      <div id="dropZone" class="drop">
+        <strong>Drop PDF Here</strong><br>
+        <span style="font-size:11px; color:var(--text-dim)">or click to browse</span>
+        <input type="file" id="fileInput" accept="application/pdf" hidden>
+      </div>
+      
+      <label style="margin-top:10px">Extraction Method</label>
+      <select id="extractMode">
+        <option value="local">Local Enhanced (Default)</option>
+        <option value="deepseek">DeepSeek API (Cloud)</option>
+      </select>
+
+      <!-- Local Settings -->
+      <div id="localSettings" class="settings-group">
+        <div style="display:flex; justify-content:space-between; margin-bottom:5px">
+          <label style="margin:0">Auto-OCR (Sparse Text)</label>
+          <div id="autoOcrToggle" class="switch on"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <label style="margin:0">Table Detection</label>
+          <div id="tableDetectToggle" class="switch on"></div>
+        </div>
+      </div>
+
+      <!-- DeepSeek Settings -->
+      <div id="deepseekSettings" class="settings-group hidden">
+        <label>API Endpoint</label>
+        <input id="ocrEndpoint" type="text" value="https://api.alphaxiv.org/models/v1/deepseek/deepseek-ocr/inference">
+        <label style="margin-top:5px">Proxy (Optional)</label>
+        <input id="ocrProxy" type="text" placeholder="https://your-proxy.com/...">
+      </div>
+
+      <div class="btn-row">
+        <button id="btnStep1" class="primary" disabled>Run Extraction</button>
+        <button id="btnCancel1" disabled>Cancel</button>
+      </div>
+
+      <div>
+        <div class="status">
+          <span id="status1">Waiting for file...</span>
+          <span id="progText1">0%</span>
+        </div>
+        <div class="progress-wrap"><div id="progBar1" class="progress-bar"></div></div>
+      </div>
+    </div>
+
+    <!-- Preview Step 1 -->
+    <div class="card" style="flex:1">
+      <div class="card-head"><span class="card-title">Extracted Assets</span></div>
+      <div id="gallery" class="gallery"></div>
+      <label style="margin-top:10px">Markdown Output</label>
+      <textarea id="mdOutput" readonly></textarea>
+    </div>
+  </div>
+
+  <!-- COLUMN 2: Groq & Schema -->
+  <div class="col">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">2. Structure Data</span>
+        <span class="badge">Groq LLM</span>
+      </div>
+
+      <div class="btn-row">
+        <div style="flex:1">
+          <label>Groq API Key</label>
+          <input id="groqKey" type="password" placeholder="gsk_...">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <div style="flex:1">
+          <label>Model</label>
+          <select id="groqModel">
+            <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+            <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label>CORS Proxy</label>
+          <div style="display:flex; align-items:center; height:36px;">
+            <div id="corsToggle" class="switch" title="Use corsproxy.io"></div>
+            <span style="font-size:11px; margin-left:8px">Use Proxy</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label>JSON Schema</label>
+        <div style="display:flex; gap:5px">
+          <input type="file" id="schemaFile" accept=".json,.txt" style="width:70%">
+          <button id="loadDefaultSchema" style="width:30%">Load Default</button>
+        </div>
+        <textarea id="schemaInput" placeholder="Paste JSON Schema here..." style="margin-top:5px; height:60px"></textarea>
+      </div>
+
+      <div>
+        <label>Prompt Instruction</label>
+        <textarea id="groqPrompt" style="height:60px">Output a JSON according to the schema. Preserve {{IMG:...}} placeholders exactly.</textarea>
+      </div>
+
+      <button id="btnStep2" class="primary" style="width:100%" disabled>Run Structuring</button>
+
+      <div>
+        <div class="status"><span id="status2">Idle</span></div>
+        <div class="progress-wrap"><div id="progBar2" class="progress-bar"></div></div>
+      </div>
+    </div>
+
+    <!-- Preview Step 2 -->
+    <div class="card" style="flex:1">
+      <div class="card-head">
+        <span class="card-title">Groq Output (JSON)</span>
+        <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('jsonOutput')">Copy</button>
+      </div>
+      <div id="jsonOutput" class="preview-box"></div>
+    </div>
+  </div>
+
+  <!-- COLUMN 3: Assembly -->
+  <div class="col">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">3. Final Assembly</span>
+        <span class="badge">Image Injection</span>
+      </div>
+
+      <div class="btn-row">
+        <div style="flex:1">
+          <label>Compress Images</label>
+          <div id="compressToggle" class="switch on"></div>
+        </div>
+        <div style="flex:1">
+          <label>Quality (0.1-1.0)</label>
+          <input type="number" id="imgQuality" value="0.7" step="0.1" max="1">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <div style="flex:1">
+          <label>Max Width (px)</label>
+          <input type="number" id="imgMaxWidth" value="1280">
+        </div>
+        <div style="flex:1">
+          <label>JSON Display Width</label>
+          <input type="number" id="jsonDispWidth" value="400">
+        </div>
+      </div>
+
+      <button id="btnStep3" class="primary" style="width:100%; margin-top:10px" disabled>Inject Images & Finalize</button>
+
+      <div>
+        <div class="status"><span id="status3">Idle</span></div>
+        <div class="progress-wrap"><div id="progBar3" class="progress-bar"></div></div>
+      </div>
+    </div>
+
+    <!-- Preview Step 3 -->
+    <div class="card" style="flex:1">
+      <div class="card-head">
+        <span class="card-title">Final JSON</span>
+        <div style="display:flex; gap:5px">
+          <button style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('finalJson')">Copy</button>
+          <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" id="btnDownload">Download</button>
+        </div>
+      </div>
+      <div id="finalJson" class="preview-box" style="flex:1"></div>
+    </div>
+  </div>
+</main>
+
+<!-- Logs Drawer -->
+<div id="logs" class="minimized">
+  <div class="log-head" onclick="document.getElementById('logs').classList.toggle('minimized')">
+    <span>System Logs</span>
+    <span>▲ Toggle</span>
+  </div>
+  <div id="logBody" class="log-body"></div>
+</div>
+
+<!-- Hidden Form for Fallback -->
+<iframe name="sink" id="sink" style="display:none"></iframe>
+<form id="hiddenForm" target="sink" method="POST" enctype="multipart/form-data" style="display:none">
+  <input type="file" name="file" id="hiddenInput"/>
+</form>
+
+<script>
+/**
+ * APP STATE & CONFIG
+ */
+const CONFIG = {
+  deepseek: {
+    maxAttempts: 5,
+    backoffBase: 3000,
+    xhrTimeout: 600000, // 10 mins
+    formTimeout: 300000 // 5 mins
+  },
+  phPrefix: '{{IMG:',
+  phSuffix: '}}'
+};
+
+const state = {
+  file: null,
+  assets: [], // { id, page, width, height, blob, url, matrix, yPos }
+  markdown: "",
+  groqJson: "",
+  finalJson: null,
+  aborts: { step1: null },
+  ocrWorker: null
+};
+
+// UI References
+const ui = {
+  drop: document.getElementById('dropZone'),
+  fileIn: document.getElementById('fileInput'),
+  btn1: document.getElementById('btnStep1'),
+  btnCancel1: document.getElementById('btnCancel1'),
+  gallery: document.getElementById('gallery'),
+  mdOut: document.getElementById('mdOutput'),
+  
+  extractMode: document.getElementById('extractMode'),
+  localSet: document.getElementById('localSettings'),
+  dsSet: document.getElementById('deepseekSettings'),
+  
+  groqKey: document.getElementById('groqKey'),
+  schemaIn: document.getElementById('schemaInput'),
+  btn2: document.getElementById('btnStep2'),
+  jsonOut: document.getElementById('jsonOutput'),
+  
+  btn3: document.getElementById('btnStep3'),
+  finalOut: document.getElementById('finalJson'),
+  btnDl: document.getElementById('btnDownload'),
+  
+  logs: document.getElementById('logBody')
+};
+
+/**
+ * INITIALIZATION
+ */
+(function init() {
+  // Load Theme
+  const theme = localStorage.getItem('theme') || 'dark';
+  setTheme(theme === 'dark');
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    setTheme(!isDark);
+  });
+
+  // Load Keys
+  ui.groqKey.value = localStorage.getItem('groqKey') || '';
+  ui.groqKey.addEventListener('change', e => localStorage.setItem('groqKey', e.target.value));
+
+  // Mode Toggle
+  ui.extractMode.addEventListener('change', (e) => {
+    if(e.target.value === 'local') {
+      ui.localSet.classList.remove('hidden');
+      ui.dsSet.classList.add('hidden');
+    } else {
+      ui.localSet.classList.add('hidden');
+      ui.dsSet.classList.remove('hidden');
+    }
+  });
+
+  // Load Schema Helper
+  document.getElementById('loadDefaultSchema').addEventListener('click', async () => {
+    try {
+      const res = await fetch('json-schema.json');
+      if(res.ok) {
+        ui.schemaIn.value = await res.text();
+        log("Loaded json-schema.json from project folder", "SUCCESS");
+      } else {
+        log("json-schema.json not found in folder", "WARN");
+      }
+    } catch(e) { log("Error loading default schema", "ERR"); }
+  });
+  
+  document.getElementById('schemaFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if(f) ui.schemaIn.value = await f.text();
+  });
+
+  // Toggles
+  document.querySelectorAll('.switch').forEach(el => {
+    el.addEventListener('click', () => el.classList.toggle('on'));
+  });
+
+  log("System Ready. PDF.js Worker: " + pdfjsLib.GlobalWorkerOptions.workerSrc);
+})();
+
+function setTheme(isDark) {
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('themeToggle').classList.toggle('on', isDark);
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+}
+
+function log(msg, type="INFO") {
+  const div = document.createElement('div');
+  div.className = `log-entry ${type}`;
+  div.textContent = `[${new Date().toLocaleTimeString()}] [${type}] ${msg}`;
+  ui.logs.appendChild(div);
+  ui.logs.scrollTop = ui.logs.scrollHeight;
+}
+
+function setProgress(step, pct, text) {
+  const bar = document.getElementById(`progBar${step}`);
+  const txt = document.getElementById(`progText${step}`);
+  const stat = document.getElementById(`status${step}`);
+  
+  bar.style.width = `${pct}%`;
+  if(txt) txt.textContent = `${Math.round(pct)}%`;
+  if(text) stat.textContent = text;
+}
+
+/**
+ * STEP 1: PDF INPUT & EXTRACTION
+ */
+ui.drop.addEventListener('click', () => ui.fileIn.click());
+ui.drop.addEventListener('dragover', e => { e.preventDefault(); ui.drop.classList.add('drag'); });
+ui.drop.addEventListener('dragleave', () => ui.drop.classList.remove('drag'));
+ui.drop.addEventListener('drop', e => {
+  e.preventDefault(); ui.drop.classList.remove('drag');
+  handleFile(e.dataTransfer.files[0]);
+});
+ui.fileIn.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(f) {
+  if(!f || f.type !== 'application/pdf') return alert("PDF only");
+  state.file = f;
+  ui.drop.innerHTML = `<strong>${f.name}</strong><br>${(f.size/1024/1024).toFixed(2)} MB`;
+  ui.btn1.disabled = false;
+  log(`File selected: ${f.name}`);
+}
+
+ui.btn1.addEventListener('click', async () => {
+  resetStep1();
+  ui.btn1.disabled = true;
+  ui.btnCancel1.disabled = false;
+  state.aborts.step1 = new AbortController();
+  const signal = state.aborts.step1.signal;
+  const mode = ui.extractMode.value;
+
+  try {
+    // 1. Extract Images (Always runs first to populate gallery)
+    log("Starting Image Extraction...");
+    setProgress(1, 5, "Scanning Images...");
+    await extractImagesFromPDF(state.file, signal);
+    
+    let rawText = "";
+
+    if (mode === 'local') {
+      // 2a. Local Enhanced Processing
+      log("Starting Local Layout Analysis...");
+      setProgress(1, 30, "Analyzing Layout...");
+      rawText = await runLocalPDFProcessing(state.file, signal);
+    } else {
+      // 2b. DeepSeek OCR
+      log("Starting DeepSeek OCR...");
+      setProgress(1, 30, "Negotiating OCR...");
+      rawText = await runDeepSeekOCR(state.file, signal);
+      // DeepSeek doesn't inject placeholders automatically in the right spots relative to our image extraction
+      // So we append them at the end or use the simple injector
+      rawText = injectPlaceholdersSimple(rawText);
+    }
+    
+    state.markdown = rawText;
+    ui.mdOut.value = state.markdown;
+    
+    setProgress(1, 100, "Extraction Complete");
+    log("Step 1 Complete", "SUCCESS");
+    
+    // Enable Step 2
+    ui.btn2.disabled = false;
+    document.getElementById('pipe1').classList.add('active');
+
+  } catch (e) {
+    if (signal.aborted) log("Step 1 Cancelled", "WARN");
+    else log(`Step 1 Failed: ${e.message}`, "ERR");
+    setProgress(1, 0, "Failed");
+  } finally {
+    ui.btn1.disabled = false;
+    ui.btnCancel1.disabled = true;
+  }
+});
+
+ui.btnCancel1.addEventListener('click', () => {
+  if(state.aborts.step1) state.aborts.step1.abort();
+});
+
+function resetStep1() {
+  state.assets = [];
+  state.markdown = "";
+  ui.gallery.innerHTML = "";
+  ui.mdOut.value = "";
+  setProgress(1, 0, "Starting...");
+}
+
+// --- PDF.js Image Extraction (Shared) ---
+async function extractImagesFromPDF(file, signal) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument(buf).promise;
+  
+  for (let i = 1; i <= pdf.numPages; i++) {
+    if(signal.aborted) throw new Error("Aborted");
+    setProgress(1, 5 + (i/pdf.numPages)*20, `Scanning Images P${i}...`);
+    
+    const page = await pdf.getPage(i);
+    const ops = await page.getOperatorList();
+    const viewport = page.getViewport({scale: 1.0}); 
+    
+    let m = [1, 0, 0, 1, 0, 0];
+    const stack = [];
+    const multiply = (m1, m2) => [
+      m1[0]*m2[0] + m1[2]*m2[1],
+      m1[1]*m2[0] + m1[3]*m2[1],
+      m1[0]*m2[2] + m1[2]*m2[3],
+      m1[1]*m2[2] + m1[3]*m2[3],
+      m1[0]*m2[4] + m1[2]*m2[5] + m1[4],
+      m1[1]*m2[4] + m1[3]*m2[5] + m1[5]
+    ];
+
+    for (let j = 0; j < ops.fnArray.length; j++) {
+      const fn = ops.fnArray[j];
+      const args = ops.argsArray[j];
+
+      if (fn === pdfjsLib.OPS.save) stack.push([...m]);
+      else if (fn === pdfjsLib.OPS.restore) { if(stack.length) m = stack.pop(); }
+      else if (fn === pdfjsLib.OPS.transform) m = multiply(m, args);
+      else if (fn === pdfjsLib.OPS.paintImageXObject || fn === pdfjsLib.OPS.paintInlineImageXObject) {
+        const imgName = args[0];
+        let imgObj;
+        try {
+          if(page.objs.has(imgName)) imgObj = page.objs.get(imgName);
+          else if(page.commonObjs.has(imgName)) imgObj = page.commonObjs.get(imgName);
+        } catch(e) { continue; }
+
+        if(imgObj) {
+          const pt = viewport.convertToViewportPoint(m[4], m[5]);
+          const yPos = pt[1]; 
+          await processImage(imgObj, i, m, yPos);
+        }
+      }
+    }
+  }
+}
+
+async function processImage(imgObj, pageNum, matrix, yPos) {
+  if(imgObj.width < 50 || imgObj.height < 50) return; 
+
+  const canvas = document.createElement('canvas');
+  canvas.width = imgObj.width;
+  canvas.height = imgObj.height;
+  const ctx = canvas.getContext('2d');
+
+  if(imgObj.bitmap) {
+    ctx.drawImage(imgObj.bitmap, 0, 0);
+  } else if(imgObj.data) {
+    const imgData = ctx.createImageData(imgObj.width, imgObj.height);
+    const data = imgObj.data;
+    let j=0, len=data.length;
+    if(len === imgObj.width*imgObj.height*4) imgData.data.set(data);
+    else if(len === imgObj.width*imgObj.height*3) {
+      for(let i=0; i<len; i+=3) {
+        imgData.data[j++] = data[i]; imgData.data[j++] = data[i+1]; imgData.data[j++] = data[i+2]; imgData.data[j++] = 255;
+      }
+    } else {
+      for(let i=0; i<len; i++) {
+        imgData.data[j++] = data[i]; imgData.data[j++] = data[i]; imgData.data[j++] = data[i]; imgData.data[j++] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  } else return;
+
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  const url = URL.createObjectURL(blob);
+  const id = `p${pageNum}_${state.assets.length+1}`;
+  
+  state.assets.push({ id, page: pageNum, width: imgObj.width, height: imgObj.height, blob, url, yPos });
+  
+  const div = document.createElement('div');
+  div.className = 'thumb';
+  div.innerHTML = `<img src="${url}"><span>${id}</span>`;
+  ui.gallery.appendChild(div);
+}
+
+// --- LOCAL PDF PROCESSING (The "Brain" from App A) ---
+async function runLocalPDFProcessing(file, signal) {
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjsLib.getDocument(buf).promise;
+  const total = doc.numPages;
+  let fullMarkdown = "";
+
+  const autoOcr = document.getElementById('autoOcrToggle').classList.contains('on');
+  const tableDetect = document.getElementById('tableDetectToggle').classList.contains('on');
+
+  for(let i=1; i<=total; i++){
+    if(signal.aborted) throw new Error("Aborted");
+    setProgress(1, 30 + (i/total)*60, `Processing Text P${i}...`);
+    
+    const page = await doc.getPage(i);
+    let pageMd = "";
+    
+    // 1. Get Text Content
+    const textContent = await page.getTextContent({ normalizeWhitespace:true });
+    const sparse = isTextSparse(textContent);
+    
+    if(sparse && autoOcr) {
+      log(`Page ${i}: Sparse text detected. Running Tesseract OCR...`, "WARN");
+      const canvas = await renderPageToCanvas(page, 2.0);
+      pageMd = await ocrCanvas(canvas);
+    } else {
+      // Enhanced Layout Analysis
+      pageMd = textContentToMarkdown(textContent, { tableDetect, mergeHyphens: true });
+    }
+
+    // 2. Inject Images for this page
+    // We append images found on this page to the bottom of the page text
+    // This keeps them contextually relevant to the page
+    const pageImages = state.assets.filter(a => a.page === i).sort((a,b) => a.yPos - b.yPos);
+    if(pageImages.length > 0) {
+      pageMd += "\n\n<!-- Images on Page " + i + " -->\n";
+      pageImages.forEach(img => {
+        pageMd += `\n${CONFIG.phPrefix}${img.id}${CONFIG.phSuffix}`;
+      });
+    }
+
+    fullMarkdown += (pageMd ? pageMd + "\n\n" : "") + "---\n\n";
+  }
+
+  return fullMarkdown.trim();
+}
+
+// --- Local Logic Helpers ---
+function isTextSparse(textContent){
+  const items = textContent.items || [];
+  const totalChars = items.reduce((p,c)=>p + (c.str?.length||0), 0);
+  return items.length < 8 || totalChars < 40;
+}
+
+async function renderPageToCanvas(page, scale){
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently:true });
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas;
+}
+
+async function ensureOCRWorker(){
+  if(state.ocrWorker) return state.ocrWorker;
+  log("Initializing Tesseract Worker...");
+  state.ocrWorker = await Tesseract.createWorker('eng');
+  return state.ocrWorker;
+}
+
+async function ocrCanvas(canvas){
+  const worker = await ensureOCRWorker();
+  const res = await worker.recognize(canvas);
+  return res.data.text;
+}
+
+function textContentToMarkdown(textContent, opts){
+  const { tableDetect, mergeHyphens } = opts;
+  const items = textContent.items.map(it => ({
+    str: it.str,
+    x: it.transform[4],
+    y: it.transform[5],
+    w: it.width,
+    fs: Math.sqrt(Math.abs(it.transform[0]*it.transform[3])),
+    hasEOL: it.hasEOL
+  }));
+
+  // Sort Y desc, X asc
+  items.sort((a,b)=> b.y - a.y || a.x - b.x);
+
+  // Group lines
+  const lines = [];
+  let cur = [];
+  for(const it of items){
+    if(cur.length===0){ cur=[it]; continue; }
+    const last = cur[cur.length-1];
+    if(Math.abs(it.y - last.y) < 5){ cur.push(it); }
+    else { lines.push(cur); cur=[it]; }
+  }
+  if(cur.length) lines.push(cur);
+  for(const ln of lines){ ln.sort((a,b)=> a.x - b.x); }
+
+  // Column Detection (Simple Split)
+  const lineLeftXs = lines.map(ln=> ln.length? ln[0].x : 0);
+  const minX = Math.min(...lineLeftXs), maxX = Math.max(...lineLeftXs);
+  const spread = maxX - minX;
+  let left = [], right = [];
+  
+  if(spread > 100 && lines.length > 10){
+    const mid = minX + spread/2;
+    for(const ln of lines){
+      (ln[0].x < mid ? left : right).push(ln);
+    }
+    if(Math.min(left.length, right.length) < 3) { left = lines; right = []; }
+  } else { left = lines; right = []; }
+
+  function linesToParas(LINES){
+    const joined = LINES.map(ln=>{
+      let s = "";
+      for(let i=0;i<ln.length;i++){
+        const a = ln[i], b = ln[i+1];
+        s += a.str;
+        if(b && (b.x - (a.x + a.w) > 3)) s += " ";
+      }
+      return { text:s.trim(), y: ln[0]?.y ?? 0, fsAvg: ln.reduce((p,c)=>p+c.fs,0)/ln.length };
+    });
+
+    const paras = [];
+    let curp = [];
+    for(let i=0;i<joined.length;i++){
+      const line = joined[i];
+      if(!line.text) continue;
+      curp.push(line);
+      const next = joined[i+1];
+      const hardBreak = !next || (Math.abs(next.y - line.y) > 15);
+      if(hardBreak){ paras.push(curp); curp = []; }
+    }
+
+    const out = [];
+    for(const para of paras){
+      const plines = para.map(p=>p.text);
+      const fsAvg = para.reduce((p,c)=>p+c.fsAvg,0)/Math.max(1,para.length);
+
+      // Heading Heuristic
+      if(plines.length===1 && fsAvg > 12){
+        out.push(`## ${plines[0]}`);
+        continue;
+      }
+
+      // Table Heuristic
+      if(tableDetect && plines.length>=3){
+        const splitLines = plines.map(t=> t.split(/\s{2,}/));
+        const maxCols = Math.max(...splitLines.map(a=>a.length));
+        if(maxCols>=3){
+          const dense = splitLines.filter(a=>a.length===maxCols);
+          if(dense.length >= Math.floor(plines.length*0.6)){
+            const header = splitLines[0];
+            const md = [];
+            md.push(`| ${header.join(' | ')} |`);
+            md.push(`| ${header.map(()=> '---').join(' | ')} |`);
+            for(let r=1;r<splitLines.length;r++) md.push(`| ${splitLines[r].join(' | ')} |`);
+            out.push(md.join("\n"));
+            continue;
+          }
+        }
+      }
+
+      // List Heuristic
+      if(plines.every(t=>/^\s*([•·\-–]|\d+\.)\s+/.test(t))){
+        out.push(plines.map(t=> `- ${t.replace(/^\s*([•·\-–]|\d+\.)\s+/,'').trim()}`).join("\n"));
+        continue;
+      }
+
+      let pText = plines.join("\n");
+      if(mergeHyphens) pText = pText.replace(/-\n(?=\S)/g,'');
+      pText = pText.replace(/([^\n])\n(?!\n)/g, '$1 ');
+      out.push(pText.trim());
+    }
+    return out.join("\n\n");
+  }
+
+  const mdLeft = linesToParas(left);
+  const mdRight = right.length ? ("\n\n" + linesToParas(right)) : "";
+  return mdLeft + mdRight;
+}
+
+// --- DEEPSEEK OCR LOGIC (Legacy/Cloud Option) ---
+async function runDeepSeekOCR(file, signal) {
+  const endpoint = document.getElementById('ocrEndpoint').value;
+  const customProxy = document.getElementById('ocrProxy').value;
+  
+  const candidates = [
+    { name: 'CorsProxy.io', url: `https://corsproxy.io/?${encodeURIComponent(endpoint)}`, type: 'xhr' },
+    { name: 'Proxy.Cors.sh', url: `https://proxy.cors.sh/${endpoint}`, type: 'xhr' },
+    { name: 'Direct', url: endpoint, type: 'xhr' },
+    { name: 'Form Fallback', url: `https://corsproxy.io/?${encodeURIComponent(endpoint)}`, type: 'form' }
+  ];
+  if(customProxy) candidates.unshift({ name: 'Custom', url: customProxy, type: 'xhr' });
+
+  const promises = candidates.map((c, i) => {
+    return new Promise(async (resolve, reject) => {
+      await new Promise(r => setTimeout(r, i * 2000));
+      if(signal.aborted) return reject();
+      
+      for(let attempt=1; attempt <= CONFIG.deepseek.maxAttempts; attempt++) {
+        if(signal.aborted) return reject();
+        log(`Trying ${c.name} (Attempt ${attempt})...`);
+        try {
+          const txt = c.type === 'xhr' 
+            ? await tryXHR(c.url, file, signal) 
+            : await tryForm(c.url, file);
+          if(txt) {
+            log(`Winner: ${c.name}`, "SUCCESS");
+            resolve(txt);
+            return;
+          }
+        } catch(e) {}
+        await new Promise(r => setTimeout(r, CONFIG.deepseek.backoffBase));
+      }
+      reject();
+    });
+  });
+
+  return Promise.any(promises);
+}
+
+function tryXHR(url, file, signal) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.timeout = CONFIG.deepseek.xhrTimeout;
+    xhr.withCredentials = false;
+    const fd = new FormData();
+    fd.append('file', file);
+    xhr.onload = () => {
+      if(xhr.status >= 200 && xhr.status < 300) {
+        const txt = parseDeepSeekResponse(xhr.responseText);
+        if(txt) resolve(txt); else reject();
+      } else reject();
+    };
+    xhr.onerror = reject;
+    xhr.ontimeout = reject;
+    if(signal) signal.addEventListener('abort', () => xhr.abort());
+    xhr.send(fd);
+  });
+}
+
+function tryForm(url, file) {
+  return new Promise((resolve, reject) => {
+    const form = document.getElementById('hiddenForm');
+    const input = document.getElementById('hiddenInput');
+    const iframe = document.getElementById('sink');
+    form.action = url;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    let done = false;
+    const t = setTimeout(() => { done=true; reject(); }, CONFIG.deepseek.formTimeout);
+    iframe.onload = () => {
+      if(done) return;
+      done = true; clearTimeout(t);
+      try {
+        const txt = parseDeepSeekResponse(iframe.contentDocument.body.textContent);
+        if(txt) resolve(txt); else reject();
+      } catch(e) { reject(); }
+    };
+    form.submit();
+  });
+}
+
+function parseDeepSeekResponse(raw) {
+  try {
+    const json = JSON.parse(raw);
+    const findStr = (o) => {
+      if(typeof o === 'string') return o;
+      if(typeof o !== 'object' || !o) return '';
+      let max = '';
+      for(let k in o) {
+        let s = findStr(o[k]);
+        if(s.length > max.length) max = s;
+      }
+      return max;
+    };
+    return findStr(json);
+  } catch(e) { return raw.length > 50 ? raw : null; }
+}
+
+function injectPlaceholdersSimple(text) {
+  // Fallback injector for DeepSeek mode
+  const assets = [...state.assets].sort((a,b) => a.page - b.page || a.yPos - b.yPos);
+  let output = text + "\n\n";
+  let curPage = -1;
+  assets.forEach(a => {
+    if(a.page !== curPage) {
+      output += `\n<!-- Page ${a.page} Images -->\n`;
+      curPage = a.page;
+    }
+    output += `\n${CONFIG.phPrefix}${a.id}${CONFIG.phSuffix}`;
+  });
+  return output;
+}
+
+/**
+ * STEP 2: GROQ STRUCTURING
+ */
+ui.btn2.addEventListener('click', async () => {
+  const key = ui.groqKey.value;
+  const schema = ui.schemaIn.value;
+  if(!key) return alert("API Key required");
+  if(!schema) return alert("Schema required");
+
+  ui.btn2.disabled = true;
+  setProgress(2, 10, "Preparing Request...");
+  
+  const model = document.getElementById('groqModel').value;
+  const useProxy = document.getElementById('corsToggle').classList.contains('on');
+  const prompt = document.getElementById('groqPrompt').value;
+
+  const messages = [
+    { role: "system", content: "You are a data extraction assistant. Output valid JSON only." },
+    { role: "user", content: `JSON Schema:\n${schema}` },
+    { role: "user", content: `Text with Image Placeholders:\n${state.markdown}` },
+    { role: "user", content: prompt }
+  ];
+
+  try {
+    log("Sending to Groq...");
+    setProgress(2, 40, "Waiting for LLM...");
+    
+    let url = "https://api.groq.com/openai/v1/chat/completions";
+    if(useProxy) url = "https://corsproxy.io/?" + encodeURIComponent(url);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${key}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.2,
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
+    
+    const data = await res.json();
+    const content = data.choices[0].message.content;
+    
+    state.groqJson = content;
+    ui.jsonOut.textContent = content;
+    
+    setProgress(2, 100, "Structuring Complete");
+    log("Step 2 Complete", "SUCCESS");
+    
+    ui.btn3.disabled = false;
+    document.getElementById('pipe2').classList.add('active');
+
+  } catch(e) {
+    log(e.message, "ERR");
+    setProgress(2, 0, "Failed");
+  } finally {
+    ui.btn2.disabled = false;
+  }
+});
+
+/**
+ * STEP 3: ASSEMBLY
+ */
+ui.btn3.addEventListener('click', async () => {
+  if(!state.groqJson) return;
+  ui.btn3.disabled = true;
+  setProgress(3, 10, "Parsing JSON...");
+
+  try {
+    let jsonObj = JSON.parse(state.groqJson);
+    const compress = document.getElementById('compressToggle').classList.contains('on');
+    const quality = parseFloat(document.getElementById('imgQuality').value);
+    const maxW = parseInt(document.getElementById('imgMaxWidth').value);
+    const dispW = parseInt(document.getElementById('jsonDispWidth').value);
+
+    const processNode = async (node) => {
+      if (typeof node === 'string') {
+        if(node.startsWith(CONFIG.phPrefix) && node.endsWith(CONFIG.phSuffix)) {
+          const id = node.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '');
+          const asset = state.assets.find(a => a.id === id);
+          if(asset) {
+            const b64 = await compressImage(asset.blob, compress, quality, maxW);
+            return {
+              type: 'image',
+              src: b64,
+              width: dispW,
+              description: '',
+              compressionImmune: false,
+              centering: 'default'
+            };
+          }
+        }
+        return node;
+      } else if (Array.isArray(node)) {
+        return Promise.all(node.map(processNode));
+      } else if (typeof node === 'object' && node !== null) {
+        const newObj = {};
+        for(let k in node) {
+          newObj[k] = await processNode(node[k]);
+        }
+        return newObj;
+      }
+      return node;
+    };
+
+    setProgress(3, 30, "Processing Images...");
+    state.finalJson = await processNode(jsonObj);
+    
+    const jsonStr = JSON.stringify(state.finalJson, null, 2);
+    ui.finalOut.textContent = jsonStr;
+    
+    setProgress(3, 100, "Assembly Complete");
+    log("Step 3 Complete", "SUCCESS");
+
+  } catch(e) {
+    log(e.message, "ERR");
+    setProgress(3, 0, "Failed");
+  } finally {
+    ui.btn3.disabled = false;
+  }
+});
+
+// --- Image Compression ---
+function compressImage(blob, doCompress, quality, maxWidth) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if(!doCompress) return resolve(e.target.result);
+      
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if(w > maxWidth) {
+          h = Math.round(h * (maxWidth/w));
+          w = maxWidth;
+        }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF'; 
+        ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * UTILS
+ */
+window.copyToClip = (id) => {
+  const txt = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(txt);
+  log("Copied to clipboard");
+};
+
+ui.btnDl.addEventListener('click', () => {
+  if(!state.finalJson) return;
+  const blob = new Blob([JSON.stringify(state.finalJson, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'final_output.json';
+  a.click();
+});
+
+// Cleanup
+window.addEventListener('beforeunload', async ()=>{
+  try{ if(state.ocrWorker){ await state.ocrWorker.terminate(); } } catch{}
+});
+
+</script>
+</body>
+</html>
