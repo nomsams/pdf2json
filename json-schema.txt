@@ -49,22 +49,22 @@
        - **terms**: Show/hide terms section (d: true).
 
 2. **companyA**: Recipient ("Till:") of the quote.
-   - **name**: Company name, e.g., "Polcirkelns Pålar och Spont AB" (d: None).
-   - **address**: Street or address line, e.g., "Ref: Anton Mäki" or "Sidensvansvägen 2" (d: None).
-   - **phoneNumber**: Phone, e.g., "Mob: +46706588775" (d: None).
-   - **postalCode**: Postal code + city, e.g., "218 36 Bunkeflostrand" (d: None).
+   - **name**: Company name, e.g., "företagsnamn AB" (d: None).
+   - **address**: Street or address line, e.g., "Ref: Anton" or "Vögenvägen 2" (d: None).
+   - **phoneNumber**: Phone, e.g., "Mob: +46706588000" (d: None).
+   - **postalCode**: Postal code + city, e.g., "218 36 Adress" (d: None).
    - **attention**: Attention line / contact person(s), e.g., "Att: Byggservice / Anton Mäki" (d: None).
    - **taxDetails**:
-       - **vatNumber**: VAT number, e.g., "SE5593211443" (d: None).
+       - **vatNumber**: VAT number, e.g., "SE5593211400" (d: None).
    - NOTE: The app flattens all nested values into HTML with <br>; extra custom fields are allowed.
 
-3. **companyB**: Issuing company ("Från:"), usually Betongakuten.
-   - **name**: Company name, e.g., "Betongakuten i Sverige AB" (p: Betongakuten i Sverige AB).
-   - **address**: Address line, e.g., "Sidensvansvägen 2" (p: Sidensvansvägen 2).
-   - **phoneNumber**: Phone, e.g., "Mob: +46700379411" (p: Mob: +46700379411).
-   - **postalCode**: Postal code + city, e.g., "218 32 Bunkeflostrand" (p: 218 32 Bunkeflostrand).
-   - **attention**: Persons responsible, e.g., "Mr. Johnny & Samir" (p: Johnny & Samir).
-   - **orgNumber**: Organisation number, e.g., "556931-7497" (p: 556931-7497).
+3. **companyB**: Issuing company ("Från:"), usually Betong.
+   - **name**: Company name, e.g., "Betong AB" (p: Betong AB.
+   - **address**: Address line, e.g., "Vägenvägen 2" (p: Vägensvägen 2).
+   - **phoneNumber**: Phone, e.g., "Mob: +46700379400" (p: Mob: +46700379400).
+   - **postalCode**: Postal code + city, e.g., "218 32 Bunkeflos" (p: 218 32 Bunkeflo).
+   - **attention**: Persons responsible, e.g., "Mr. Johan" (p: Johan).
+   - **orgNumber**: Organisation number, e.g., "556931-0000" (p: 556931-0000).
    - Additional nested fields (email, website, bank, etc.) may be added and will be rendered as extra lines.
 
 4. **items**: Array of main quoted items and separators, in display order.
