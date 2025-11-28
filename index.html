@@ -44,7 +44,9 @@
       font-family: system-ui, -apple-system, sans-serif; 
       min-height: 100vh; 
       display: flex; flex-direction: column;
+      /* Ensure scrollbar appears on body if needed */
       overflow-y: auto; 
+      overflow-x: hidden;
     }
     
     header { 
@@ -65,7 +67,8 @@
       margin: 0 auto;
       width: 100%;
       position: relative; 
-      padding-bottom: 220px; 
+      /* Add padding bottom so logs don't cover content */
+      padding-bottom: 250px; 
     }
     
     .col { display: flex; flex-direction: column; gap: 15px; min-height: 0; z-index: 2; }
@@ -499,6 +502,13 @@ function highlightPlaceholders(text) {
   return safe.replace(/{{IMG:[^}]+}}/g, '<span class="ph-tag">$&</span>');
 }
 
+// Helper to extract index from ID "p4_6" -> 6
+function getImgIndex(id) {
+  const parts = id.split('_');
+  if(parts.length > 1) return parseInt(parts[1], 10);
+  return 0;
+}
+
 /**
  * STEP 1: PDF INPUT & EXTRACTION
  */
@@ -717,6 +727,9 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
       pageMd = await ocrCanvas(canvas);
       // Append images at bottom for OCR pages (no coord info)
       const pageImages = validAssets.filter(a => a.page === i);
+      // Sort strictly by ID index
+      pageImages.sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+      
       if(pageImages.length) {
         pageMd += "\n\n";
         pageImages.forEach(img => pageMd += `\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}`);
@@ -736,10 +749,7 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
 // --- Smart Interleaving Algorithm ---
 function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   // 1. Convert Text Items to Viewport Coordinates (Top-Left Origin)
-  // PDF Text Transform: [scaleX, skewY, skewX, scaleY, x, y] (y is usually bottom-up)
   const items = textContent.items.map(it => {
-    // Transform point (x, y + height) to get Top-Left of text in PDF space
-    // Note: PDF Y is bottom-up. y is baseline. y+height is top.
     const tx = it.transform[4];
     const ty = it.transform[5] + it.height; 
     const pt = viewport.convertToViewportPoint(tx, ty);
@@ -785,6 +795,10 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   // Create a combined list of {type:'text', block} and {type:'image', img}
   const combined = [];
   blocks.forEach(b => combined.push({ type: 'text', y: b.yStart, data: b }));
+  
+  // Sort images strictly by ID first to ensure relative order is correct
+  images.sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+  
   images.forEach(img => combined.push({ type: 'image', y: img.yPos, data: img }));
 
   // Sort by Y (Visual Top)
@@ -955,7 +969,8 @@ function parseDeepSeekResponse(raw) {
 }
 
 function injectPlaceholdersSimple(text, skipCount) {
-  const assets = state.assets.slice(skipCount).sort((a,b) => a.page - b.page || a.yPos - b.yPos);
+  // Sort strictly by ID index for DeepSeek mode
+  const assets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
   let output = text + "\n\n";
   let curPage = -1;
   assets.forEach(a => {
@@ -1078,8 +1093,15 @@ ui.btn3.addEventListener('click', async () => {
           if(asset) {
             usedImageIds.add(id);
             const b64 = await compressImage(asset.blob, compress, quality, maxW);
-            // Return RAW Base64 string as requested
-            return b64;
+            // Return Object Structure as per schema
+            return {
+              type: 'image',
+              src: b64,
+              width: phWidth, // Use preserved width
+              description: '',
+              compressionImmune: false,
+              centering: 'default'
+            };
           }
         }
         return node;
