@@ -1066,7 +1066,7 @@ function togglePreview() {
 }
 
 /**
- * STEP 3: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION)
+ * STEP 3: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION & SANITIZATION)
  */
 ui.btn3.addEventListener('click', async () => {
   if(!state.groqJson) return;
@@ -1118,11 +1118,6 @@ ui.btn3.addEventListener('click', async () => {
               if (isSourceKey || hasImageProps) {
                 log(`Injecting RAW SRC for ${id} into key '${key}' (Parent detected as Image Object)`, "VERBOSE");
                 newObj[key] = b64;
-                
-                // If width is missing in the parent, we can optionally add it if the schema allows, 
-                // but usually we just fill the existing key.
-                // If the parent has 'width' set to 0 or null, we might want to update it, 
-                // but strictly we should only replace the placeholder.
               } else {
                 // The placeholder is likely a value for a generic key (e.g., "cover_image": "{{IMG...}}")
                 // We should inject the FULL object structure here.
@@ -1151,7 +1146,7 @@ ui.btn3.addEventListener('click', async () => {
     };
 
     setProgress(3, 30, "Processing Images...");
-    state.finalJson = await processNode(jsonObj);
+    let processedJson = await processNode(jsonObj);
 
     // FALLBACK: Inject unused images into Info.Images or Info.Bilder
     const validAssets = state.assets.slice(skipCount);
@@ -1160,14 +1155,14 @@ ui.btn3.addEventListener('click', async () => {
     if(unusedAssets.length > 0) {
       log(`Injecting ${unusedAssets.length} missing images into Info...`, "WARN");
       
-      if(!state.finalJson.Info) state.finalJson.Info = {};
+      if(!processedJson.Info) processedJson.Info = {};
       
       let targetArray = null;
-      if(Array.isArray(state.finalJson.Info.Images)) targetArray = state.finalJson.Info.Images;
-      else if(Array.isArray(state.finalJson.Info.Bilder)) targetArray = state.finalJson.Info.Bilder;
+      if(Array.isArray(processedJson.Info.Images)) targetArray = processedJson.Info.Images;
+      else if(Array.isArray(processedJson.Info.Bilder)) targetArray = processedJson.Info.Bilder;
       else {
-        state.finalJson.Info.Images = [];
-        targetArray = state.finalJson.Info.Images;
+        processedJson.Info.Images = [];
+        targetArray = processedJson.Info.Images;
       }
 
       for(const asset of unusedAssets) {
@@ -1182,6 +1177,10 @@ ui.btn3.addEventListener('click', async () => {
         });
       }
     }
+
+    // --- STRICT SANITIZATION ---
+    // This ensures the JSON structure matches exactly what the Offert app expects, preventing crashes.
+    state.finalJson = sanitizeFinalJson(processedJson);
     
     const jsonStr = JSON.stringify(state.finalJson, null, 2);
     ui.finalOut.textContent = jsonStr;
@@ -1196,6 +1195,47 @@ ui.btn3.addEventListener('click', async () => {
     ui.btn3.disabled = false;
   }
 });
+
+// --- Sanitizer Function ---
+function sanitizeFinalJson(data) {
+  if (!data || typeof data !== 'object') data = {};
+  if (!data.quote) data.quote = {};
+  
+  // Helper to fix items array
+  const fixItems = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(i => i && typeof i === 'object').map(item => {
+      // Fix subItems: Must be an array
+      if (item.subItems && !Array.isArray(item.subItems)) {
+        // If it's a single object, wrap it. If it's something else, empty array.
+        if (typeof item.subItems === 'object') item.subItems = [item.subItems];
+        else item.subItems = [];
+      }
+      if (!item.subItems) item.subItems = [];
+      return item;
+    });
+  };
+
+  if (data.items) data.items = fixItems(data.items);
+  if (data.optionalItems) data.optionalItems = fixItems(data.optionalItems);
+  
+  // Fix InfoImages
+  // Sometimes LLMs output a single object instead of an array
+  if (data.infoImages && !Array.isArray(data.infoImages)) {
+     if (typeof data.infoImages === 'object') data.infoImages = [data.infoImages];
+     else data.infoImages = [];
+  }
+  // Filter out nulls
+  if (data.infoImages) {
+    data.infoImages = data.infoImages.filter(i => i && typeof i === 'object');
+  }
+
+  // Ensure Company Objects are Objects (not strings)
+  if (data.companyA && typeof data.companyA !== 'object') data.companyA = { name: String(data.companyA) };
+  if (data.companyB && typeof data.companyB !== 'object') data.companyB = { name: String(data.companyB) };
+
+  return data;
+}
 
 // --- Image Compression ---
 function compressImage(blob, doCompress, quality, maxWidth) {
