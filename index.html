@@ -283,17 +283,108 @@
       
       <div class="card-head">
         <span class="card-title">Groq Output (JSON)</span>
-        <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('jsonOutput')">Copy</button>
+        <div style="display:flex; gap:5px">
+          <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('jsonOutput')">Copy</button>
+          <!-- Download LLM JSON button -->
+          <button style="width:auto; padding:2px 8px; font-size:10px" id="btnDownloadGroq">Download</button>
+        </div>
       </div>
       <div id="jsonOutput" class="preview-box" style="height:150px"></div>
     </div>
   </div>
 
-  <!-- COLUMN 3: Assembly -->
+  <!-- COLUMN 3: Translation & Assembly -->
   <div class="col">
+    <!-- STEP 3: Translation (Optional) -->
     <div class="card">
       <div class="card-head">
-        <span class="card-title">3. Final Assembly</span>
+        <span class="card-title">3. Translation (Optional)</span>
+        <span class="badge">DeepL</span>
+      </div>
+
+      <div class="btn-row">
+        <div style="flex:1">
+          <label>DeepL API Key</label>
+          <input id="deeplKey" type="password" placeholder="xxxxxxxx:fx">
+        </div>
+        <div style="flex:1">
+          <label>CORS Proxy</label>
+          <div style="display:flex; align-items:center; height:36px;">
+            <div id="deeplCorsToggle" class="switch on" title="Use corsproxy.io"></div>
+            <span style="font-size:11px; margin-left:8px">Enabled</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <div style="flex:1">
+          <label>Source Language</label>
+          <select id="deeplSource">
+            <option value="">Auto Detect</option>
+            <option value="EN">English (EN)</option>
+            <option value="SV">Swedish (SV)</option>
+            <option value="DE">German (DE)</option>
+            <option value="ES">Spanish (ES)</option>
+            <option value="FR">French (FR)</option>
+            <option value="IT">Italian (IT)</option>
+            <option value="NL">Dutch (NL)</option>
+            <option value="PL">Polish (PL)</option>
+            <option value="PT">Portuguese (PT)</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label>Target Language</label>
+          <select id="deeplTarget">
+            <option value="SV" selected>Swedish (SV)</option>
+            <option value="EN">English (EN)</option>
+            <option value="DE">German (DE)</option>
+            <option value="ES">Spanish (ES)</option>
+            <option value="FR">French (FR)</option>
+            <option value="IT">Italian (IT)</option>
+            <option value="NL">Dutch (NL)</option>
+            <option value="PL">Polish (PL)</option>
+            <option value="PT">Portuguese (PT)</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label>JSON Source</label>
+        <div class="btn-row">
+          <button id="btnTransFromGroq">Use Groq Output</button>
+          <button id="btnTransUpload">Upload JSON</button>
+          <input type="file" id="transFile" accept=".json,.txt,application/json" style="display:none">
+        </div>
+      </div>
+
+      <div style="margin-top:8px">
+        <label>JSON To Translate</label>
+        <div id="transInputPreview" class="preview-box" style="height:120px"></div>
+      </div>
+
+      <button id="btnTransRun" class="primary" style="width:100%; margin-top:8px">Run Translation</button>
+
+      <div>
+        <div class="status"><span id="statusTrans">Idle</span></div>
+        <div class="progress-wrap"><div id="progBarTrans" class="progress-bar"></div></div>
+      </div>
+
+      <div style="margin-top:8px">
+        <div class="card-head" style="padding-left:0; padding-right:0; border-bottom:none; margin-bottom:4px;">
+          <span class="card-title">Translated JSON</span>
+          <div style="display:flex; gap:5px">
+            <button style="width:auto; padding:2px 8px; font-size:10px" id="btnTransCopy">Copy</button>
+            <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" id="btnTransDownload">Download</button>
+          </div>
+        </div>
+        <div id="transOutputPreview" class="preview-box" style="height:120px"></div>
+      </div>
+    </div>
+
+    <!-- STEP 4: Final Assembly -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">4. Final Assembly</span>
         <span class="badge">Image Injection</span>
       </div>
 
@@ -330,7 +421,7 @@
       </div>
     </div>
 
-    <!-- Preview Step 3 -->
+    <!-- Preview Step 4 -->
     <div class="card" style="flex:1">
       <div class="card-head">
         <span class="card-title">Final JSON</span>
@@ -381,7 +472,13 @@ const state = {
   groqJson: "",
   finalJson: null,
   aborts: { step1: null },
-  ocrWorker: null
+  ocrWorker: null,
+  // Translation state
+  transInputRaw: "",
+  transOutputRaw: "",
+  transSourceName: "",
+  // JSON used by assembly step (can be Groq output or translated JSON)
+  currentJsonForAssembly: ""
 };
 
 // UI References
@@ -404,9 +501,25 @@ const ui = {
   groqInputPreview: document.getElementById('groqInputPreview'),
   jsonOut: document.getElementById('jsonOutput'),
   
+  // Translation UI
+  deeplKey: document.getElementById('deeplKey'),
+  deeplSource: document.getElementById('deeplSource'),
+  deeplTarget: document.getElementById('deeplTarget'),
+  transInputPreview: document.getElementById('transInputPreview'),
+  transOutputPreview: document.getElementById('transOutputPreview'),
+  btnTransRun: document.getElementById('btnTransRun'),
+  btnTransFromGroq: document.getElementById('btnTransFromGroq'),
+  btnTransUpload: document.getElementById('btnTransUpload'),
+  transFile: document.getElementById('transFile'),
+  btnTransCopy: document.getElementById('btnTransCopy'),
+  btnTransDownload: document.getElementById('btnTransDownload'),
+  
+  // Assembly
   btn3: document.getElementById('btnStep3'),
   finalOut: document.getElementById('finalJson'),
   btnDl: document.getElementById('btnDownload'),
+  // Groq JSON download
+  btnDlGroq: document.getElementById('btnDownloadGroq'),
   
   logs: document.getElementById('logBody')
 };
@@ -426,6 +539,9 @@ const ui = {
   // Load Keys
   ui.groqKey.value = localStorage.getItem('groqKey') || '';
   ui.groqKey.addEventListener('change', e => localStorage.setItem('groqKey', e.target.value));
+
+  ui.deeplKey.value = localStorage.getItem('deeplKey') || '';
+  ui.deeplKey.addEventListener('change', e => localStorage.setItem('deeplKey', e.target.value));
 
   // Mode Toggle
   ui.extractMode.addEventListener('change', (e) => {
@@ -490,9 +606,25 @@ function setProgress(step, pct, text) {
   const txt = document.getElementById(`progText${step}`);
   const stat = document.getElementById(`status${step}`);
   
-  bar.style.width = `${pct}%`;
-  if(txt) txt.textContent = `${Math.round(pct)}%`;
-  if(text) stat.textContent = text;
+  if (bar) bar.style.width = `${pct}%`;
+  if (txt) txt.textContent = `${Math.round(pct)}%`;
+  if (stat && text) stat.textContent = text;
+}
+
+function setTransProgress(pct, text) {
+  const bar = document.getElementById('progBarTrans');
+  const stat = document.getElementById('statusTrans');
+  if (bar) bar.style.width = `${pct}%`;
+  if (stat && text) stat.textContent = text;
+}
+
+function prettyPrintJson(raw) {
+  if (!raw) return '';
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch(e) {
+    return raw;
+  }
 }
 
 function highlightPlaceholders(text) {
@@ -791,18 +923,14 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   images.forEach(img => combined.push({ type: 'image', y: img.yPos, data: img }));
 
   // 5. Sort Combined List
-  // IMPROVED SORTING: Prioritize ID order for images relative to each other to prevent "4 before 3"
+  // Prioritize ID order for images relative to each other
   combined.sort((a,b) => {
-    // If both are images, strictly follow ID order
     if (a.type === 'image' && b.type === 'image') {
       return getImgIndex(a.data.id) - getImgIndex(b.data.id);
     }
-    // Otherwise, use visual Y position
-    // If Y difference is significant, use Y
     if (Math.abs(a.y - b.y) > 15) {
       return a.y - b.y;
     }
-    // If Y is close, prefer text over image usually, or left-to-right
     return 0; 
   });
 
@@ -1046,8 +1174,21 @@ ui.btn2.addEventListener('click', async () => {
     // Clean JSON before storing
     content = cleanJson(content);
     
+    // Keep the raw JSON string as returned by the LLM
     state.groqJson = content;
-    ui.jsonOut.textContent = content;
+    // Default JSON for assembly is the Groq output (can be overridden by translation)
+    state.currentJsonForAssembly = content;
+    // Also pre-populate translation input for convenience
+    state.transInputRaw = content;
+    state.transSourceName = state.file && state.file.name
+      ? state.file.name.replace(/\.pdf$/i, "") + " structured"
+      : "structured";
+
+    // Pretty-print JSON for display
+    ui.jsonOut.textContent = prettyPrintJson(content);
+    if (ui.transInputPreview) {
+      ui.transInputPreview.textContent = prettyPrintJson(content);
+    }
     
     setProgress(2, 100, "Structuring Complete");
     log("Step 2 Complete", "SUCCESS");
@@ -1069,15 +1210,276 @@ function togglePreview() {
 }
 
 /**
- * STEP 3: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION & SANITIZATION)
+ * STEP 3: TRANSLATION (OPTIONAL, DEEPL)
+ */
+
+// Helpers to decide what to translate
+function shouldTranslateString(str) {
+  if (!str) return false;
+  const trimmed = str.trim();
+  if (!trimmed) return false;
+  if (trimmed.length < 2) return false;
+  if (trimmed.startsWith(CONFIG.phPrefix) && trimmed.endsWith(CONFIG.phSuffix)) return false;
+  if (/^data:image\//i.test(trimmed)) return false;
+  if (/^https?:\/\//i.test(trimmed)) return false;
+  if (/^[\d\s.,:/+\-–()]+$/.test(trimmed)) return false;
+  return true;
+}
+
+function containsImgPlaceholder(str) {
+  return typeof str === 'string' && str.includes(CONFIG.phPrefix);
+}
+
+function splitByPlaceholders(str) {
+  const regex = new RegExp(`(${CONFIG.phPrefix}[^}]+${CONFIG.phSuffix})`, 'g');
+  const parts = str.split(regex);
+  return parts
+    .filter(p => p.length > 0)
+    .map(p => {
+      if (p.startsWith(CONFIG.phPrefix) && p.endsWith(CONFIG.phSuffix)) {
+        return { type: 'placeholder', value: p };
+      }
+      return { type: 'text', value: p };
+    });
+}
+
+// Collect unique text segments to translate (token-efficient, placeholder-safe)
+function collectTextSegments(node, segmentMap) {
+  if (node == null) return;
+  if (typeof node === 'string') {
+    if (containsImgPlaceholder(node)) {
+      const segs = splitByPlaceholders(node);
+      segs.forEach(seg => {
+        if (seg.type === 'text' && shouldTranslateString(seg.value) && !segmentMap.has(seg.value)) {
+          segmentMap.set(seg.value, null);
+        }
+      });
+    } else if (shouldTranslateString(node) && !segmentMap.has(node)) {
+      segmentMap.set(node, null);
+    }
+  } else if (Array.isArray(node)) {
+    node.forEach(child => collectTextSegments(child, segmentMap));
+  } else if (typeof node === 'object') {
+    for (const key in node) {
+      if (Object.prototype.hasOwnProperty.call(node, key)) {
+        collectTextSegments(node[key], segmentMap);
+      }
+    }
+  }
+}
+
+// Apply translations back into JSON structure
+function applySegmentTranslations(node, segmentMap) {
+  if (node == null) return node;
+  if (typeof node === 'string') {
+    if (containsImgPlaceholder(node)) {
+      const segs = splitByPlaceholders(node);
+      const rebuilt = segs.map(seg => {
+        if (seg.type === 'text' && segmentMap.has(seg.value)) {
+          return segmentMap.get(seg.value);
+        }
+        return seg.value;
+      }).join('');
+      return rebuilt;
+    } else if (segmentMap.has(node)) {
+      return segmentMap.get(node);
+    }
+    return node;
+  } else if (Array.isArray(node)) {
+    return node.map(child => applySegmentTranslations(child, segmentMap));
+  } else if (typeof node === 'object') {
+    const out = {};
+    for (const key in node) {
+      if (Object.prototype.hasOwnProperty.call(node, key)) {
+        out[key] = applySegmentTranslations(node[key], segmentMap);
+      }
+    }
+    return out;
+  }
+  return node;
+}
+
+// DeepL call
+async function translateSegmentsWithDeepL(key, segments, sourceLang, targetLang, useProxy) {
+  if (!segments.length) return [];
+  const params = new URLSearchParams();
+  params.append('auth_key', key);
+  segments.forEach(t => params.append('text', t));
+  params.append('target_lang', targetLang || 'SV');
+  if (sourceLang) params.append('source_lang', sourceLang);
+
+  let url = 'https://api-free.deepl.com/v2/translate';
+  if (useProxy) {
+    url = 'https://corsproxy.io/?' + encodeURIComponent(url);
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString()
+  });
+
+  if (!res.ok) {
+    throw new Error('DeepL API error: ' + res.status);
+  }
+
+  const data = await res.json();
+  if (!data.translations || !Array.isArray(data.translations)) {
+    throw new Error('DeepL response missing translations');
+  }
+
+  return data.translations.map(t => t.text);
+}
+
+// Translation UI wiring
+ui.btnTransFromGroq.addEventListener('click', () => {
+  if (!state.groqJson) {
+    alert("No Groq output available yet. Run Step 2 first.");
+    return;
+  }
+  state.transInputRaw = state.groqJson;
+  ui.transInputPreview.textContent = prettyPrintJson(state.groqJson);
+  state.transSourceName = state.file && state.file.name
+    ? state.file.name.replace(/\.pdf$/i, "") + " structured"
+    : "structured";
+  log("Loaded JSON for translation from Groq output.", "INFO");
+});
+
+ui.btnTransUpload.addEventListener('click', () => {
+  ui.transFile.click();
+});
+
+ui.transFile.addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const txt = await f.text();
+  state.transInputRaw = txt;
+  ui.transInputPreview.textContent = prettyPrintJson(txt);
+  state.transSourceName = f.name.replace(/\.[^.]+$/,'');
+  log("Loaded JSON for translation from file: " + f.name, "INFO");
+});
+
+ui.btnTransRun.addEventListener('click', runTranslation);
+
+ui.btnTransCopy.addEventListener('click', () => {
+  const txt = ui.transOutputPreview.textContent;
+  if (!txt) return;
+  navigator.clipboard.writeText(txt);
+  log("Copied translated JSON to clipboard", "INFO");
+});
+
+ui.btnTransDownload.addEventListener('click', () => {
+  if (!state.transOutputRaw) return;
+  const blob = new Blob([state.transOutputRaw], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  let base = state.transSourceName || (state.file && state.file.name
+    ? state.file.name.replace(/\.pdf$/i, "")
+    : "translated");
+  a.download = `${base} translated.json`;
+  a.click();
+});
+
+async function runTranslation() {
+  const key = ui.deeplKey.value.trim();
+  if (!key) {
+    alert("DeepL API key required");
+    return;
+  }
+
+  // Prefer explicit translation input; fall back to Groq JSON
+  const raw = state.transInputRaw || state.groqJson;
+  if (!raw) {
+    alert("No JSON to translate. Load JSON from Groq or upload a JSON file.");
+    return;
+  }
+
+  try {
+    ui.btnTransRun.disabled = true;
+    setTransProgress(5, "Parsing JSON...");
+    let obj;
+    try {
+      obj = JSON.parse(raw);
+    } catch(e) {
+      alert("Input is not valid JSON: " + e.message);
+      setTransProgress(0, "Failed");
+      ui.btnTransRun.disabled = false;
+      return;
+    }
+
+    const segmentMap = new Map();
+    collectTextSegments(obj, segmentMap);
+    const uniqueSegments = Array.from(segmentMap.keys());
+    log(`Found ${uniqueSegments.length} unique text segments to translate.`, "INFO");
+
+    if (!uniqueSegments.length) {
+      const outStr = JSON.stringify(obj, null, 2);
+      state.transOutputRaw = outStr;
+      state.currentJsonForAssembly = outStr;
+      ui.transOutputPreview.textContent = outStr;
+      setTransProgress(100, "Nothing to translate");
+      log("No translatable segments found; JSON left unchanged.", "WARN");
+      return;
+    }
+
+    setTransProgress(30, "Requesting DeepL translation...");
+
+    const srcLang = ui.deeplSource.value || '';
+    const tgtLang = ui.deeplTarget.value || 'SV';
+    const useProxy = document.getElementById('deeplCorsToggle').classList.contains('on');
+
+    const translatedSegments = await translateSegmentsWithDeepL(
+      key,
+      uniqueSegments,
+      srcLang,
+      tgtLang,
+      useProxy
+    );
+
+    if (translatedSegments.length !== uniqueSegments.length) {
+      log("DeepL returned mismatched number of segments", "WARN");
+    }
+
+    uniqueSegments.forEach((seg, idx) => {
+      segmentMap.set(seg, translatedSegments[idx] || seg);
+    });
+
+    setTransProgress(80, "Applying translations...");
+    const translatedObj = applySegmentTranslations(obj, segmentMap);
+    const outStr = JSON.stringify(translatedObj, null, 2);
+
+    state.transOutputRaw = outStr;
+    state.currentJsonForAssembly = outStr;
+
+    ui.transOutputPreview.textContent = outStr;
+    setTransProgress(100, "Translation complete");
+    log("Translation step complete.", "SUCCESS");
+
+  } catch(e) {
+    log("Translation failed: " + e.message, "ERR");
+    setTransProgress(0, "Failed");
+    alert("Translation failed: " + e.message);
+  } finally {
+    ui.btnTransRun.disabled = false;
+  }
+}
+
+/**
+ * STEP 4: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION & SANITIZATION)
  */
 ui.btn3.addEventListener('click', async () => {
-  if(!state.groqJson) return;
+  const src = state.currentJsonForAssembly || state.groqJson;
+  if (!src) {
+    alert("No structured JSON available. Run Step 2 (Groq) or load/translate a JSON first.");
+    return;
+  }
+
   ui.btn3.disabled = true;
   setProgress(3, 10, "Parsing JSON...");
 
   try {
-    let jsonObj = JSON.parse(state.groqJson);
+    let jsonObj = JSON.parse(src);
     const compress = document.getElementById('compressToggle').classList.contains('on');
     const quality = parseFloat(document.getElementById('imgQuality').value);
     const maxW = parseInt(document.getElementById('imgMaxWidth').value);
@@ -1095,8 +1497,7 @@ ui.btn3.addEventListener('click', async () => {
     // Recursive walker that is Context-Aware
     const processNode = async (node, parentKey = null) => {
       if (Array.isArray(node)) {
-        // Map and wait
-        const res = await Promise.all(node.map(item => processNode(item)));
+        const res = await Promise.all(node.map(item => processNode(item, parentKey)));
         return res;
       } 
       else if (typeof node === 'object' && node !== null) {
@@ -1116,14 +1517,11 @@ ui.btn3.addEventListener('click', async () => {
                 const b64 = await compressImage(asset.blob, true, quality, maxW);
                 
                 // Context Check using parentKey
-                // If parentKey suggests a source string, return string.
-                // Else return object.
                 const isSource = parentKey && ['src', 'url', 'href', 'data'].includes(parentKey.toLowerCase());
                 
                 if (isSource) {
                     return b64;
                 } else {
-                    // Return full object
                     return {
                         type: 'image',
                         src: b64,
@@ -1134,7 +1532,7 @@ ui.btn3.addEventListener('click', async () => {
                     };
                 }
             }
-            // Asset not found? Return original string (Sanitizer will clean it up if it's in an array)
+            // Asset not found? Return original string
             return node; 
         }
         return node;
@@ -1176,14 +1574,13 @@ ui.btn3.addEventListener('click', async () => {
     }
 
     // --- STRICT SANITIZATION ---
-    // This ensures the JSON structure matches exactly what the Offert app expects, preventing crashes.
     state.finalJson = sanitizeFinalJson(processedJson);
     
     const jsonStr = JSON.stringify(state.finalJson, null, 2);
     ui.finalOut.textContent = jsonStr;
     
     setProgress(3, 100, "Assembly Complete");
-    log("Step 3 Complete", "SUCCESS");
+    log("Step 4 Complete", "SUCCESS");
 
   } catch(e) {
     log(e.message, "ERR");
@@ -1205,7 +1602,6 @@ function sanitizeFinalJson(data) {
     return arr.filter(i => i && typeof i === 'object').map(item => {
       // Fix subItems: Must be an array
       if (item.subItems && !Array.isArray(item.subItems)) {
-        // If it's a single object, wrap it. If it's something else, empty array.
         if (typeof item.subItems === 'object') item.subItems = [item.subItems];
         else item.subItems = [];
       }
@@ -1221,12 +1617,10 @@ function sanitizeFinalJson(data) {
   else data.optionalItems = [];
   
   // Fix InfoImages
-  // Sometimes LLMs output a single object instead of an array
   if (data.infoImages && !Array.isArray(data.infoImages)) {
      if (typeof data.infoImages === 'object') data.infoImages = [data.infoImages];
      else data.infoImages = [];
   }
-  // Filter out nulls and strings (failed placeholders)
   if (data.infoImages) {
     data.infoImages = data.infoImages.filter(i => i && typeof i === 'object');
   } else {
@@ -1245,8 +1639,6 @@ function compressImage(blob, doCompress, quality, maxWidth) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      // Even if doCompress is false, we might want to ensure it's a valid Data URL.
-      // But based on the fix, we are defaulting doCompress to TRUE.
       if(!doCompress) return resolve(e.target.result);
       
       const img = new Image();
@@ -1297,11 +1689,30 @@ ui.btnDl.addEventListener('click', () => {
   a.click();
 });
 
-// Cleanup
-window.addEventListener('beforeunload', async ()=>{
-  try{ if(state.ocrWorker){ await state.ocrWorker.terminate(); } } catch{}
+// Download the JSON coming directly from the LLM (Step 2)
+ui.btnDlGroq.addEventListener('click', () => {
+  if(!state.groqJson) return;
+
+  const pretty = prettyPrintJson(state.groqJson);
+
+  const blob = new Blob([pretty], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+
+  let name = "structured";
+  if(state.file && state.file.name) {
+    name = state.file.name.replace(/\.pdf$/i, "");
+  }
+  a.download = `${name} structured.json`;
+
+  a.click();
 });
 
+// Cleanup
+window.addEventListener('beforeunload', async ()=> {
+  try{ if(state.ocrWorker){ await state.ocrWorker.terminate(); } } catch{}
+});
 </script>
 </body>
 </html>
