@@ -984,6 +984,12 @@ function injectPlaceholdersSimple(text, skipCount) {
 /**
  * STEP 2: GROQ STRUCTURING
  */
+function cleanJson(str) {
+  // Remove markdown code blocks to prevent syntax errors
+  if (!str) return "";
+  return str.replace(/```json/g, '').replace(/```/g, '').trim();
+}
+
 ui.btn2.addEventListener('click', async () => {
   const key = ui.groqKey.value;
   const schema = ui.schemaIn.value;
@@ -1032,7 +1038,10 @@ ui.btn2.addEventListener('click', async () => {
     if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
     
     const data = await res.json();
-    const content = data.choices[0].message.content;
+    let content = data.choices[0].message.content;
+    
+    // Clean JSON before storing
+    content = cleanJson(content);
     
     state.groqJson = content;
     ui.jsonOut.textContent = content;
