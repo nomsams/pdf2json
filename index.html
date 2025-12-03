@@ -17,6 +17,8 @@
   </script>
   <!-- Tesseract.js -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+  <!-- Pako for Compression (Added for BTK Integration) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 
   <!-- ====== Styles ====== -->
   <style>
@@ -431,6 +433,12 @@
         </div>
       </div>
       <div id="finalJson" class="preview-box" style="flex:1"></div>
+      
+      <!-- BTK Integration Buttons -->
+      <div style="margin-top:10px; display:flex; gap:8px;">
+        <button id="btnOpenBtkLocal" style="background-color:#2d3346; border:1px solid var(--accent); color:var(--accent);">Open in BTK (Local)</button>
+        <button id="btnOpenBtkUrl" style="background-color:#2d3346; border:1px solid var(--accent); color:var(--accent);">Open in BTK (URL)</button>
+      </div>
     </div>
   </div>
 </main>
@@ -462,7 +470,8 @@ const CONFIG = {
     formTimeout: 300000 // 5 mins
   },
   phPrefix: '{{IMG:',
-  phSuffix: '}}'
+  phSuffix: '}}',
+  btkUrl: 'https://nomsams.github.io/btk/'
 };
 
 const state = {
@@ -520,6 +529,10 @@ const ui = {
   btnDl: document.getElementById('btnDownload'),
   // Groq JSON download
   btnDlGroq: document.getElementById('btnDownloadGroq'),
+  
+  // BTK Integration
+  btnOpenBtkLocal: document.getElementById('btnOpenBtkLocal'),
+  btnOpenBtkUrl: document.getElementById('btnOpenBtkUrl'),
   
   logs: document.getElementById('logBody')
 };
@@ -1707,6 +1720,54 @@ ui.btnDlGroq.addEventListener('click', () => {
   a.download = `${name} structured.json`;
 
   a.click();
+});
+
+// --- BTK Integration Logic ---
+
+// Method 1: LocalStorage (Best for same domain)
+ui.btnOpenBtkLocal.addEventListener('click', () => {
+  if (!state.finalJson) return alert("No JSON generated yet. Run Step 4 first.");
+  try {
+    const id = crypto.randomUUID();
+    const key = 'btk_quote_' + id;
+    localStorage.setItem(key, JSON.stringify(state.finalJson));
+    
+    const btkUrl = CONFIG.btkUrl + '?quoteId=' + id;
+    window.open(btkUrl, '_blank');
+    log("Opened in BTK via LocalStorage", "SUCCESS");
+  } catch (e) {
+    log("Error saving to LocalStorage: " + e.message, "ERR");
+    alert("Error saving to LocalStorage: " + e.message);
+  }
+});
+
+// Method 2: Compressed URL Hash (Fallback / Sharing)
+ui.btnOpenBtkUrl.addEventListener('click', () => {
+  if (!state.finalJson) return alert("No JSON generated yet. Run Step 4 first.");
+  try {
+    const jsonStr = JSON.stringify(state.finalJson);
+    // Pako deflate
+    const compressed = pako.deflate(jsonStr);
+    // Uint8Array to Binary String
+    let binary = '';
+    const len = compressed.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(compressed[i]);
+    }
+    // Base64
+    const b64 = btoa(binary);
+    const btkUrl = CONFIG.btkUrl + '#q=' + b64;
+    
+    // Check length limits
+    if (btkUrl.length > 30000) {
+      if(!confirm("The URL is very long (" + btkUrl.length + " chars). It might fail in some browsers. Continue?")) return;
+    }
+    window.open(btkUrl, '_blank');
+    log("Opened in BTK via URL Hash", "SUCCESS");
+  } catch (e) {
+    log("Error compressing for URL: " + e.message, "ERR");
+    alert("Error compressing for URL: " + e.message);
+  }
 });
 
 // Cleanup
