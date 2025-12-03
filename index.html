@@ -6,7 +6,6 @@
   <title>PDF Flow • Smart Layout & Schema Guided</title>
 
   <!-- ====== External Libraries ====== -->
-
   <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script>
@@ -16,12 +15,10 @@
       lib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
     })();
   </script>
-
   <!-- Tesseract.js -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
 
   <!-- ====== Styles ====== -->
-
   <style>
     :root {
       --bg: #0f1115; --panel: #151923; --muted: #232836; --muted-2: #2b3244; 
@@ -132,7 +129,6 @@
     
     .ph-tag { color: var(--highlight); font-weight: bold; border: 1px solid var(--highlight); border-radius: 4px; padding: 0 4px; background: rgba(255, 159, 28, 0.1); }
   </style>
-
 </head>
 <body>
 
@@ -152,14 +148,13 @@
   </div>
 
   <!-- COLUMN 1: PDF & OCR -->
-
   <div class="col">
     <div class="card">
       <div class="card-head">
         <span class="card-title">1. Input & Smart Extraction</span>
         <span class="badge">Local / DeepSeek</span>
       </div>
-
+      
       <div id="dropZone" class="drop">
         <strong>Drop PDF Here</strong><br>
         <span style="font-size:11px; color:var(--text-dim)">or click to browse</span>
@@ -225,7 +220,6 @@
   </div>
 
   <!-- COLUMN 2: Groq & Schema -->
-
   <div class="col">
     <div class="card">
       <div class="card-head">
@@ -296,7 +290,6 @@
   </div>
 
   <!-- COLUMN 3: Assembly -->
-
   <div class="col">
     <div class="card">
       <div class="card-head">
@@ -307,17 +300,20 @@
       <div class="btn-row">
         <div style="flex:1">
           <label>Compress Images</label>
-          <div id="compressToggle" class="switch"></div>
+          <!-- DEFAULT ON -->
+          <div id="compressToggle" class="switch on"></div>
         </div>
         <div style="flex:1">
           <label>Quality (0.1-1.0)</label>
-          <input type="number" id="imgQuality" value="1.0" step="0.1" max="1">
+          <!-- DEFAULT 0.8 -->
+          <input type="number" id="imgQuality" value="0.8" step="0.1" max="1">
         </div>
       </div>
 
       <div class="btn-row">
         <div style="flex:1">
           <label>Max Width (px)</label>
+          <!-- DEFAULT 1280 -->
           <input type="number" id="imgMaxWidth" value="1280">
         </div>
         <div style="flex:1">
@@ -349,7 +345,6 @@
 </main>
 
 <!-- Logs Drawer -->
-
 <div id="logs" class="minimized">
   <div class="log-head" onclick="document.getElementById('logs').classList.toggle('minimized')">
     <span>System Logs</span>
@@ -359,7 +354,6 @@
 </div>
 
 <!-- Hidden Form for Fallback -->
-
 <iframe name="sink" id="sink" style="display:none"></iframe>
 <form id="hiddenForm" target="sink" method="POST" enctype="multipart/form-data" style="display:none">
   <input type="file" name="file" id="hiddenInput"/>
@@ -509,7 +503,7 @@ function highlightPlaceholders(text) {
   return safe.replace(/{{IMG:[^}]+}}/g, '<span class="ph-tag">$&</span>');
 }
 
-// Helper to extract sequential index from ID "p4_6" -> 6
+// Helper to extract index from ID "p4_6" -> 6
 function getImgIndex(id) {
   const parts = id.split('_');
   if(parts.length > 1) return parseInt(parts[1], 10);
@@ -546,28 +540,28 @@ ui.btn1.addEventListener('click', async () => {
   const skipCount = parseInt(ui.skipImages.value) || 0;
 
   try {
-    log("Step 1: Starting image extraction...", "INFO");
     // 1. Extract Images
+    log("Starting Image Extraction...", "INFO");
     setProgress(1, 5, "Scanning Images...");
     await extractImagesFromPDF(state.file, signal);
     
-    // Mark skipped images visually based on gallery order
+    // Mark skipped images visually
     const thumbs = document.querySelectorAll('.thumb');
     thumbs.forEach((t, idx) => {
       if(idx < skipCount) t.classList.add('skipped');
     });
-    log(`Step 1: Found ${state.assets.length} images. Skipping first ${skipCount} (by gallery order).`, "VERBOSE");
+    log(`Found ${state.assets.length} images. Skipping first ${skipCount}.`, "VERBOSE");
 
     let rawText = "";
 
     if (mode === 'local') {
       // 2a. Local Enhanced Processing (Smart Placement)
-      log("Step 1: Starting Local Layout Analysis...", "INFO");
+      log("Starting Local Layout Analysis...", "INFO");
       setProgress(1, 30, "Analyzing Layout...");
       rawText = await runLocalPDFProcessing(state.file, signal, skipCount);
     } else {
       // 2b. DeepSeek OCR
-      log("Step 1: Starting DeepSeek OCR...", "INFO");
+      log("Starting DeepSeek OCR...", "INFO");
       setProgress(1, 30, "Negotiating OCR...");
       rawText = await runDeepSeekOCR(state.file, signal);
       rawText = injectPlaceholdersSimple(rawText, skipCount);
@@ -645,9 +639,8 @@ async function extractImagesFromPDF(file, signal) {
         } catch(e) { continue; }
 
         if(imgObj) {
-          // Calculate Visual Top-Left Y in Viewport Space
-          const pdfX = m[2] + m[4];
-          const pdfY = m[3] + m[5];
+          const pdfX = m[2] + m[4]; 
+          const pdfY = m[3] + m[5]; 
           const pt = viewport.convertToViewportPoint(pdfX, pdfY);
           const yPos = pt[1]; 
           
@@ -707,8 +700,8 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
   const autoOcr = document.getElementById('autoOcrToggle').classList.contains('on');
   const tableDetect = document.getElementById('tableDetectToggle').classList.contains('on');
 
-  // Filter assets based on skip count (global gallery order)
-  const validAssets = state.assets.slice(skipCount);
+  // Filter assets based on skip count AND sort strictly by ID index to ensure correct order
+  const validAssets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
 
   for(let i=1; i<=total; i++){
     if(signal.aborted) throw new Error("Aborted");
@@ -726,18 +719,16 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
       log(`Page ${i}: Sparse text. Running Tesseract...`, "WARN");
       const canvas = await renderPageToCanvas(page, 2.0);
       pageMd = await ocrCanvas(canvas);
-
-      // Append images at bottom for OCR pages (no reliable coord info)
-      const pageImages = validAssets.filter(a => a.page === i); // preserve gallery order
+      // Append images at bottom for OCR pages (no coord info)
+      const pageImages = validAssets.filter(a => a.page === i);
+      
       if(pageImages.length) {
         pageMd += "\n\n";
-        pageImages.forEach(img => {
-          pageMd += `\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}`;
-        });
+        pageImages.forEach(img => pageMd += `\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}`);
       }
     } else {
-      // Smart Interleaving with image order locked to gallery order
-      const pageImages = validAssets.filter(a => a.page === i); // preserve gallery order
+      // Smart Interleaving
+      const pageImages = validAssets.filter(a => a.page === i);
       pageMd = mergeImagesIntoMarkdown(textContent, pageImages, viewport, { tableDetect, mergeHyphens: true });
     }
 
@@ -747,35 +738,23 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
   return fullMarkdown.trim();
 }
 
-/**
- * Smart interleaving of text + images while preserving image order
- * exactly as in the gallery (state.assets).
- */
+// --- Smart Interleaving Algorithm ---
 function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   // 1. Convert Text Items to Viewport Coordinates (Top-Left Origin)
-  const items = (textContent.items || []).map(it => {
+  const items = textContent.items.map(it => {
     const tx = it.transform[4];
     const ty = it.transform[5] + it.height; 
     const pt = viewport.convertToViewportPoint(tx, ty);
     return {
       str: it.str,
       x: pt[0],
-      y: pt[1], // visual top Y
+      y: pt[1], // Visual Top Y
       h: it.height,
       w: it.width,
       fs: Math.sqrt(Math.abs(it.transform[0]*it.transform[3])),
       hasEOL: it.hasEOL
     };
   });
-
-  if (items.length === 0) {
-    // No text at all, just dump images in gallery order
-    let onlyImages = "";
-    images.forEach(img => {
-      onlyImages += `\n\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}\n\n`;
-    });
-    return onlyImages.trim();
-  }
 
   // 2. Sort Text by Y (Top to Bottom)
   items.sort((a,b) => a.y - b.y || a.x - b.x);
@@ -804,60 +783,39 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   }
   if(curBlock.items.length) blocks.push(curBlock);
 
-  if (blocks.length === 0) {
-    // Safety: no blocks, shove images only
-    let onlyImages = "";
-    images.forEach(img => {
-      onlyImages += `\n\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}\n\n`;
-    });
-    return onlyImages.trim();
-  }
+  // 4. Interleave Images and Blocks
+  const combined = [];
+  blocks.forEach(b => combined.push({ type: 'text', y: b.yStart, data: b }));
+  
+  // Images are already sorted by ID in runLocalPDFProcessing, but we need to merge them
+  images.forEach(img => combined.push({ type: 'image', y: img.yPos, data: img }));
 
-  // 4. Bucket images relative to blocks, but ALWAYS in gallery order
-  // buckets[0]  => images before first block
-  // buckets[i]  => images after block (i-1) and before block i (for i >= 1)
-  const buckets = Array(blocks.length + 1).fill(null).map(() => []);
-  const threshold = 20; // px tolerance
-
-  images.forEach(img => {
-    let targetIndex = blocks.length; // default after last block
-    for (let i = 0; i < blocks.length; i++) {
-      const b = blocks[i];
-
-      // If image is clearly above this block
-      if (img.yPos < b.yStart - threshold) {
-        targetIndex = i;
-        break;
-      }
-
-      // If image overlaps or sits right after this block
-      if (img.yPos <= b.yEnd + threshold) {
-        targetIndex = i + 1;
-        break;
-      }
+  // 5. Sort Combined List
+  // IMPROVED SORTING: Prioritize ID order for images relative to each other to prevent "4 before 3"
+  combined.sort((a,b) => {
+    // If both are images, strictly follow ID order
+    if (a.type === 'image' && b.type === 'image') {
+      return getImgIndex(a.data.id) - getImgIndex(b.data.id);
     }
-    buckets[targetIndex].push(img);
+    // Otherwise, use visual Y position
+    // If Y difference is significant, use Y
+    if (Math.abs(a.y - b.y) > 15) {
+      return a.y - b.y;
+    }
+    // If Y is close, prefer text over image usually, or left-to-right
+    return 0; 
   });
 
-  // 5. Generate Markdown in strict gallery order
+  // 6. Generate Markdown
   let md = "";
-
-  // Images before first block
-  buckets[0].forEach(img => {
-    md += `\n\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}\n\n`;
-  });
-
-  // Each block + images assigned after it
-  for (let i = 0; i < blocks.length; i++) {
-    const blockText = simpleBlockToText(blocks[i].items);
-    if (blockText.trim()) {
+  combined.forEach(node => {
+    if(node.type === 'image') {
+      md += `\n\n${CONFIG.phPrefix}${node.data.id}|W:${node.data.width}|H:${node.data.height}${CONFIG.phSuffix}\n\n`;
+    } else {
+      const blockText = simpleBlockToText(node.data.items);
       md += blockText + "\n\n";
     }
-
-    buckets[i + 1].forEach(img => {
-      md += `\n\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}\n\n`;
-    });
-  }
+  });
 
   return md.trim();
 }
@@ -930,13 +888,13 @@ async function runDeepSeekOCR(file, signal) {
       
       for(let attempt=1; attempt <= CONFIG.deepseek.maxAttempts; attempt++) {
         if(signal.aborted) return reject();
-        log(`DeepSeek candidate ${c.name} (Attempt ${attempt})...`, "VERBOSE");
+        log(`Trying ${c.name} (Attempt ${attempt})...`, "VERBOSE");
         try {
           const txt = c.type === 'xhr' 
             ? await tryXHR(c.url, file, signal) 
             : await tryForm(c.url, file);
           if(txt) {
-            log(`DeepSeek winner: ${c.name}`, "SUCCESS");
+            log(`Winner: ${c.name}`, "SUCCESS");
             resolve(txt);
             return;
           }
@@ -1011,13 +969,10 @@ function parseDeepSeekResponse(raw) {
   } catch(e) { return raw.length > 50 ? raw : null; }
 }
 
-/**
- * Inject simple page-level placeholders after DeepSeek OCR.
- * Uses asset order exactly as shown in the gallery.
- */
 function injectPlaceholdersSimple(text, skipCount) {
-  const assets = state.assets.slice(skipCount); // preserve gallery order
-  let output = (text || "").trim() + "\n\n";
+  // Sort strictly by ID index for DeepSeek mode
+  const assets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+  let output = text + "\n\n";
   let curPage = -1;
   assets.forEach(a => {
     if(a.page !== curPage) {
@@ -1032,6 +987,12 @@ function injectPlaceholdersSimple(text, skipCount) {
 /**
  * STEP 2: GROQ STRUCTURING
  */
+function cleanJson(str) {
+  // Remove markdown code blocks to prevent syntax errors
+  if (!str) return "";
+  return str.replace(/```json/g, '').replace(/```/g, '').trim();
+}
+
 ui.btn2.addEventListener('click', async () => {
   const key = ui.groqKey.value;
   const schema = ui.schemaIn.value;
@@ -1080,7 +1041,10 @@ ui.btn2.addEventListener('click', async () => {
     if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
     
     const data = await res.json();
-    const content = data.choices[0].message.content;
+    let content = data.choices[0].message.content;
+    
+    // Clean JSON before storing
+    content = cleanJson(content);
     
     state.groqJson = content;
     ui.jsonOut.textContent = content;
@@ -1105,15 +1069,12 @@ function togglePreview() {
 }
 
 /**
- * STEP 3: ASSEMBLY
- * Important: replace placeholders with image DATA only, preserving
- * the JSON structure produced by the model (no extra nesting).
+ * STEP 3: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION & SANITIZATION)
  */
 ui.btn3.addEventListener('click', async () => {
   if(!state.groqJson) return;
   ui.btn3.disabled = true;
   setProgress(3, 10, "Parsing JSON...");
-  log("Step 3: Starting final assembly...", "INFO");
 
   try {
     let jsonObj = JSON.parse(state.groqJson);
@@ -1125,126 +1086,167 @@ ui.btn3.addEventListener('click', async () => {
 
     const usedImageIds = new Set();
 
-    // Recursive walker to replace placeholders safely
-    const processNode = async (node, path = '', parent = null, key = null) => {
-      if (typeof node === 'string') {
-        const trimmed = node.trim();
-        if (trimmed.startsWith(CONFIG.phPrefix) && trimmed.endsWith(CONFIG.phSuffix)) {
-          // Extract info from {{IMG:id|W:..|H:..}}
-          const payload = trimmed.slice(CONFIG.phPrefix.length, -CONFIG.phSuffix.length);
-          const parts = payload.split('|');
-          const id = parts[0];
-          let phWidth = null;
-          let phHeight = null;
-          parts.forEach(p => {
-            if (p.startsWith('W:')) {
-              const v = parseInt(p.split(':')[1]);
-              if (!Number.isNaN(v)) phWidth = v;
-            }
-            if (p.startsWith('H:')) {
-              const v = parseInt(p.split(':')[1]);
-              if (!Number.isNaN(v)) phHeight = v;
-            }
-          });
+    // Helper to check if a string is a placeholder
+    const isPlaceholder = (str) => typeof str === 'string' && str.startsWith(CONFIG.phPrefix) && str.endsWith(CONFIG.phSuffix);
+    
+    // Helper to extract ID from placeholder
+    const extractId = (ph) => ph.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|')[0];
 
-          // If parent object is missing width/height, use placeholder hints
-          if (parent && typeof parent === 'object' && !Array.isArray(parent)) {
-            if (phWidth && (parent.width === undefined || parent.width === null)) {
-              parent.width = phWidth;
-              log(`Step 3: Using placeholder width ${phWidth} for ${id} at ${path || '(root)'}`, "VERBOSE");
+    // Recursive walker that is Context-Aware
+    const processNode = async (node, parentKey = null) => {
+      if (Array.isArray(node)) {
+        // Map and wait
+        const res = await Promise.all(node.map(item => processNode(item)));
+        return res;
+      } 
+      else if (typeof node === 'object' && node !== null) {
+        const newObj = {};
+        for (const [key, val] of Object.entries(node)) {
+           newObj[key] = await processNode(val, key);
+        }
+        return newObj;
+      }
+      else if (typeof node === 'string') {
+        if (isPlaceholder(node)) {
+            const id = extractId(node);
+            const asset = state.assets.find(a => a.id === id);
+            if (asset) {
+                usedImageIds.add(id);
+                // ALWAYS compress/convert to JPEG to ensure manageable size
+                const b64 = await compressImage(asset.blob, true, quality, maxW);
+                
+                // Context Check using parentKey
+                // If parentKey suggests a source string, return string.
+                // Else return object.
+                const isSource = parentKey && ['src', 'url', 'href', 'data'].includes(parentKey.toLowerCase());
+                
+                if (isSource) {
+                    return b64;
+                } else {
+                    // Return full object
+                    return {
+                        type: 'image',
+                        src: b64,
+                        width: asset.width,
+                        description: '',
+                        compressionImmune: false,
+                        centering: 'default'
+                    };
+                }
             }
-            if (phHeight && (parent.height === undefined || parent.height === null)) {
-              parent.height = phHeight;
-              log(`Step 3: Using placeholder height ${phHeight} for ${id} at ${path || '(root)'}`, "VERBOSE");
-            }
-          }
-
-          const asset = state.assets.find(a => a.id === id);
-          if(asset) {
-            usedImageIds.add(id);
-            const b64 = await compressImage(asset.blob, compress, quality, maxW);
-            log(`Step 3: Replaced placeholder ${id} at ${path || '(root)'} with image data`, "INFO");
-            // IMPORTANT: return ONLY the data, keep existing JSON shape intact
-            return b64;
-          } else {
-            log(`Step 3: Placeholder ${id} at ${path || '(root)'} has no matching asset`, "WARN");
-            return node; // leave placeholder as-is if asset missing
-          }
+            // Asset not found? Return original string (Sanitizer will clean it up if it's in an array)
+            return node; 
         }
         return node;
-      } else if (Array.isArray(node)) {
-        const arr = [];
-        for (let i = 0; i < node.length; i++) {
-          arr[i] = await processNode(node[i], `${path}[${i}]`, node, i);
-        }
-        return arr;
-      } else if (node && typeof node === 'object') {
-        const out = {};
-        for (let k in node) {
-          if (!Object.prototype.hasOwnProperty.call(node, k)) continue;
-          out[k] = await processNode(node[k], path ? `${path}.${k}` : k, node, k);
-        }
-        return out;
       }
       return node;
     };
 
     setProgress(3, 30, "Processing Images...");
-    state.finalJson = await processNode(jsonObj);
+    let processedJson = await processNode(jsonObj);
 
     // FALLBACK: Inject unused images into Info.Images or Info.Bilder
     const validAssets = state.assets.slice(skipCount);
     const unusedAssets = validAssets.filter(a => !usedImageIds.has(a.id));
     
     if(unusedAssets.length > 0) {
-      log(`Step 3: Injecting ${unusedAssets.length} images that were not referenced by any placeholder into Info.*`, "WARN");
+      log(`Injecting ${unusedAssets.length} missing images into Info...`, "WARN");
       
-      // Find or Create Info object
-      if(!state.finalJson.Info) state.finalJson.Info = {};
+      if(!processedJson.Info) processedJson.Info = {};
       
-      // Determine target array
       let targetArray = null;
-      if(Array.isArray(state.finalJson.Info.Images)) targetArray = state.finalJson.Info.Images;
-      else if(Array.isArray(state.finalJson.Info.Bilder)) targetArray = state.finalJson.Info.Bilder;
+      if(Array.isArray(processedJson.Info.Images)) targetArray = processedJson.Info.Images;
+      else if(Array.isArray(processedJson.Info.Bilder)) targetArray = processedJson.Info.Bilder;
       else {
-        // Create if missing (default to Images)
-        state.finalJson.Info.Images = [];
-        targetArray = state.finalJson.Info.Images;
+        processedJson.Info.Images = [];
+        targetArray = processedJson.Info.Images;
       }
 
       for(const asset of unusedAssets) {
-        const b64 = await compressImage(asset.blob, compress, quality, maxW);
+        const b64 = await compressImage(asset.blob, true, quality, maxW);
         targetArray.push({
           type: 'image',
           src: b64,
-          width: asset.width || dispW || 400,
+          width: asset.width,
           description: '',
           compressionImmune: false,
           centering: 'default'
         });
-        log(`Step 3: Injected unused image ${asset.id} into Info.Images/Bilder`, "VERBOSE");
       }
     }
+
+    // --- STRICT SANITIZATION ---
+    // This ensures the JSON structure matches exactly what the Offert app expects, preventing crashes.
+    state.finalJson = sanitizeFinalJson(processedJson);
     
     const jsonStr = JSON.stringify(state.finalJson, null, 2);
     ui.finalOut.textContent = jsonStr;
     
     setProgress(3, 100, "Assembly Complete");
-    log(`Step 3 Complete – placeholders resolved: ${[...usedImageIds].length}, fallback images: ${unusedAssets.length}`, "SUCCESS");
+    log("Step 3 Complete", "SUCCESS");
 
   } catch(e) {
-    log(`Step 3 Error: ${e.message}`, "ERR");
+    log(e.message, "ERR");
     setProgress(3, 0, "Failed");
   } finally {
     ui.btn3.disabled = false;
   }
 });
 
+// --- Sanitizer Function ---
+function sanitizeFinalJson(data) {
+  if (!data || typeof data !== 'object') data = {};
+  if (!data.quote) data.quote = {};
+  
+  // Helper to fix items array
+  const fixItems = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    // Filter out nulls and non-objects
+    return arr.filter(i => i && typeof i === 'object').map(item => {
+      // Fix subItems: Must be an array
+      if (item.subItems && !Array.isArray(item.subItems)) {
+        // If it's a single object, wrap it. If it's something else, empty array.
+        if (typeof item.subItems === 'object') item.subItems = [item.subItems];
+        else item.subItems = [];
+      }
+      if (!item.subItems) item.subItems = [];
+      return item;
+    });
+  };
+
+  if (data.items) data.items = fixItems(data.items);
+  else data.items = [];
+
+  if (data.optionalItems) data.optionalItems = fixItems(data.optionalItems);
+  else data.optionalItems = [];
+  
+  // Fix InfoImages
+  // Sometimes LLMs output a single object instead of an array
+  if (data.infoImages && !Array.isArray(data.infoImages)) {
+     if (typeof data.infoImages === 'object') data.infoImages = [data.infoImages];
+     else data.infoImages = [];
+  }
+  // Filter out nulls and strings (failed placeholders)
+  if (data.infoImages) {
+    data.infoImages = data.infoImages.filter(i => i && typeof i === 'object');
+  } else {
+    data.infoImages = [];
+  }
+
+  // Ensure Company Objects are Objects (not strings)
+  if (data.companyA && typeof data.companyA !== 'object') data.companyA = { name: String(data.companyA) };
+  if (data.companyB && typeof data.companyB !== 'object') data.companyB = { name: String(data.companyB) };
+
+  return data;
+}
+
 // --- Image Compression ---
 function compressImage(blob, doCompress, quality, maxWidth) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
+      // Even if doCompress is false, we might want to ensure it's a valid Data URL.
+      // But based on the fix, we are defaulting doCompress to TRUE.
       if(!doCompress) return resolve(e.target.result);
       
       const img = new Image();
@@ -1299,7 +1301,7 @@ ui.btnDl.addEventListener('click', () => {
 window.addEventListener('beforeunload', async ()=>{
   try{ if(state.ocrWorker){ await state.ocrWorker.terminate(); } } catch{}
 });
-</script>
 
+</script>
 </body>
 </html>
