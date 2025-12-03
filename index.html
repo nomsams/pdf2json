@@ -45,7 +45,6 @@
       min-height: 100vh; 
       display: flex; flex-direction: column;
       overflow-y: auto; 
-      overflow-x: hidden;
     }
     
     header { 
@@ -66,7 +65,7 @@
       margin: 0 auto;
       width: 100%;
       position: relative; 
-      padding-bottom: 250px; 
+      padding-bottom: 220px; 
     }
     
     .col { display: flex; flex-direction: column; gap: 15px; min-height: 0; z-index: 2; }
@@ -500,13 +499,6 @@ function highlightPlaceholders(text) {
   return safe.replace(/{{IMG:[^}]+}}/g, '<span class="ph-tag">$&</span>');
 }
 
-// Helper to extract index from ID "p4_6" -> 6
-function getImgIndex(id) {
-  const parts = id.split('_');
-  if(parts.length > 1) return parseInt(parts[1], 10);
-  return 0;
-}
-
 /**
  * STEP 1: PDF INPUT & EXTRACTION
  */
@@ -636,8 +628,15 @@ async function extractImagesFromPDF(file, signal) {
         } catch(e) { continue; }
 
         if(imgObj) {
-          const pdfX = m[2] + m[4]; 
-          const pdfY = m[3] + m[5]; 
+          // Calculate Visual Top-Left Y in Viewport Space
+          // PDF Space (Bottom-Left Origin):
+          // Image is drawn in unit square [0,1]x[0,1] transformed by m.
+          // Top-Left in Image Space is (0,1).
+          // Transform (0,1) by m to get PDF coordinates.
+          const pdfX = m[2] + m[4]; // 0*m[0] + 1*m[2] + m[4]
+          const pdfY = m[3] + m[5]; // 0*m[1] + 1*m[3] + m[5]
+          
+          // Convert to Viewport (Top-Left Origin)
           const pt = viewport.convertToViewportPoint(pdfX, pdfY);
           const yPos = pt[1]; 
           
@@ -697,8 +696,8 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
   const autoOcr = document.getElementById('autoOcrToggle').classList.contains('on');
   const tableDetect = document.getElementById('tableDetectToggle').classList.contains('on');
 
-  // Filter assets based on skip count AND sort strictly by ID index to ensure correct order
-  const validAssets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+  // Filter assets based on skip count
+  const validAssets = state.assets.slice(skipCount);
 
   for(let i=1; i<=total; i++){
     if(signal.aborted) throw new Error("Aborted");
@@ -718,7 +717,6 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
       pageMd = await ocrCanvas(canvas);
       // Append images at bottom for OCR pages (no coord info)
       const pageImages = validAssets.filter(a => a.page === i);
-      
       if(pageImages.length) {
         pageMd += "\n\n";
         pageImages.forEach(img => pageMd += `\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}`);
@@ -738,7 +736,10 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
 // --- Smart Interleaving Algorithm ---
 function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   // 1. Convert Text Items to Viewport Coordinates (Top-Left Origin)
+  // PDF Text Transform: [scaleX, skewY, skewX, scaleY, x, y] (y is usually bottom-up)
   const items = textContent.items.map(it => {
+    // Transform point (x, y + height) to get Top-Left of text in PDF space
+    // Note: PDF Y is bottom-up. y is baseline. y+height is top.
     const tx = it.transform[4];
     const ty = it.transform[5] + it.height; 
     const pt = viewport.convertToViewportPoint(tx, ty);
@@ -781,34 +782,21 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   if(curBlock.items.length) blocks.push(curBlock);
 
   // 4. Interleave Images and Blocks
+  // Create a combined list of {type:'text', block} and {type:'image', img}
   const combined = [];
   blocks.forEach(b => combined.push({ type: 'text', y: b.yStart, data: b }));
-  
-  // Images are already sorted by ID in runLocalPDFProcessing, but we need to merge them
   images.forEach(img => combined.push({ type: 'image', y: img.yPos, data: img }));
 
-  // 5. Sort Combined List
-  // IMPROVED SORTING: Prioritize ID order for images relative to each other to prevent "4 before 3"
-  combined.sort((a,b) => {
-    // If both are images, strictly follow ID order
-    if (a.type === 'image' && b.type === 'image') {
-      return getImgIndex(a.data.id) - getImgIndex(b.data.id);
-    }
-    // Otherwise, use visual Y position
-    // If Y difference is significant, use Y
-    if (Math.abs(a.y - b.y) > 15) {
-      return a.y - b.y;
-    }
-    // If Y is close, prefer text over image usually, or left-to-right
-    return 0; 
-  });
+  // Sort by Y (Visual Top)
+  combined.sort((a,b) => a.y - b.y);
 
-  // 6. Generate Markdown
+  // 5. Generate Markdown
   let md = "";
   combined.forEach(node => {
     if(node.type === 'image') {
       md += `\n\n${CONFIG.phPrefix}${node.data.id}|W:${node.data.width}|H:${node.data.height}${CONFIG.phSuffix}\n\n`;
     } else {
+      // Convert block items to string (simplified layout analysis)
       const blockText = simpleBlockToText(node.data.items);
       md += blockText + "\n\n";
     }
@@ -967,8 +955,7 @@ function parseDeepSeekResponse(raw) {
 }
 
 function injectPlaceholdersSimple(text, skipCount) {
-  // Sort strictly by ID index for DeepSeek mode
-  const assets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+  const assets = state.assets.slice(skipCount).sort((a,b) => a.page - b.page || a.yPos - b.yPos);
   let output = text + "\n\n";
   let curPage = -1;
   assets.forEach(a => {
@@ -984,12 +971,6 @@ function injectPlaceholdersSimple(text, skipCount) {
 /**
  * STEP 2: GROQ STRUCTURING
  */
-function cleanJson(str) {
-  // Remove markdown code blocks to prevent syntax errors
-  if (!str) return "";
-  return str.replace(/```json/g, '').replace(/```/g, '').trim();
-}
-
 ui.btn2.addEventListener('click', async () => {
   const key = ui.groqKey.value;
   const schema = ui.schemaIn.value;
@@ -1038,10 +1019,7 @@ ui.btn2.addEventListener('click', async () => {
     if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
     
     const data = await res.json();
-    let content = data.choices[0].message.content;
-    
-    // Clean JSON before storing
-    content = cleanJson(content);
+    const content = data.choices[0].message.content;
     
     state.groqJson = content;
     ui.jsonOut.textContent = content;
@@ -1066,7 +1044,7 @@ function togglePreview() {
 }
 
 /**
- * STEP 3: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION & SANITIZATION)
+ * STEP 3: ASSEMBLY
  */
 ui.btn3.addEventListener('click', async () => {
   if(!state.groqJson) return;
@@ -1083,62 +1061,34 @@ ui.btn3.addEventListener('click', async () => {
 
     const usedImageIds = new Set();
 
-    // Helper to check if a string is a placeholder
-    const isPlaceholder = (str) => typeof str === 'string' && str.startsWith(CONFIG.phPrefix) && str.endsWith(CONFIG.phSuffix);
-    
-    // Helper to extract ID from placeholder
-    const extractId = (ph) => ph.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|')[0];
-
-    // Recursive walker that is Context-Aware
+    // Recursive walker to replace placeholders
     const processNode = async (node) => {
-      if (Array.isArray(node)) {
-        return Promise.all(node.map(processNode));
-      } 
-      else if (typeof node === 'object' && node !== null) {
-        const newObj = {};
-        
-        // Iterate over keys to handle context
-        for (const [key, val] of Object.entries(node)) {
+      if (typeof node === 'string') {
+        if(node.startsWith(CONFIG.phPrefix) && node.endsWith(CONFIG.phSuffix)) {
+          // Extract ID from {{IMG:id|W:..|H:..}}
+          const parts = node.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|');
+          const id = parts[0];
           
-          // Check if the VALUE is a placeholder
-          if (isPlaceholder(val)) {
-            const id = extractId(val);
-            const asset = state.assets.find(a => a.id === id);
-            
-            if (asset) {
-              usedImageIds.add(id);
-              const b64 = await compressImage(asset.blob, compress, quality, maxW);
-              
-              // CONTEXT CHECK: Does the parent object already look like an image object?
-              // We check if sibling keys exist (like 'description', 'width', 'type') 
-              // OR if the key itself suggests it's a source field (src, url, data).
-              const isSourceKey = ['src', 'url', 'data', 'href'].includes(key.toLowerCase());
-              const hasImageProps = node.hasOwnProperty('description') || node.hasOwnProperty('width') || node.hasOwnProperty('caption');
-              
-              if (isSourceKey || hasImageProps) {
-                log(`Injecting RAW SRC for ${id} into key '${key}' (Parent detected as Image Object)`, "VERBOSE");
-                newObj[key] = b64;
-              } else {
-                // The placeholder is likely a value for a generic key (e.g., "cover_image": "{{IMG...}}")
-                // We should inject the FULL object structure here.
-                log(`Injecting FULL OBJECT for ${id} into key '${key}'`, "VERBOSE");
-                newObj[key] = {
-                  type: 'image',
-                  src: b64,
-                  width: asset.width, // Use original width or dispW
-                  description: '',
-                  compressionImmune: false,
-                  centering: 'default'
-                };
-              }
-            } else {
-              log(`Asset not found for ID: ${id}`, "WARN");
-              newObj[key] = val; // Keep placeholder if not found
-            }
-          } else {
-            // Recurse if not a placeholder
-            newObj[key] = await processNode(val);
+          // Parse Width from placeholder if available
+          let phWidth = dispW;
+          const wPart = parts.find(p => p.startsWith('W:'));
+          if(wPart) phWidth = parseInt(wPart.split(':')[1]);
+
+          const asset = state.assets.find(a => a.id === id);
+          if(asset) {
+            usedImageIds.add(id);
+            const b64 = await compressImage(asset.blob, compress, quality, maxW);
+            // Return RAW Base64 string as requested
+            return b64;
           }
+        }
+        return node;
+      } else if (Array.isArray(node)) {
+        return Promise.all(node.map(processNode));
+      } else if (typeof node === 'object' && node !== null) {
+        const newObj = {};
+        for(let k in node) {
+          newObj[k] = await processNode(node[k]);
         }
         return newObj;
       }
@@ -1146,7 +1096,7 @@ ui.btn3.addEventListener('click', async () => {
     };
 
     setProgress(3, 30, "Processing Images...");
-    let processedJson = await processNode(jsonObj);
+    state.finalJson = await processNode(jsonObj);
 
     // FALLBACK: Inject unused images into Info.Images or Info.Bilder
     const validAssets = state.assets.slice(skipCount);
@@ -1155,32 +1105,32 @@ ui.btn3.addEventListener('click', async () => {
     if(unusedAssets.length > 0) {
       log(`Injecting ${unusedAssets.length} missing images into Info...`, "WARN");
       
-      if(!processedJson.Info) processedJson.Info = {};
+      // Find or Create Info object
+      if(!state.finalJson.Info) state.finalJson.Info = {};
       
+      // Determine target array
       let targetArray = null;
-      if(Array.isArray(processedJson.Info.Images)) targetArray = processedJson.Info.Images;
-      else if(Array.isArray(processedJson.Info.Bilder)) targetArray = processedJson.Info.Bilder;
+      if(Array.isArray(state.finalJson.Info.Images)) targetArray = state.finalJson.Info.Images;
+      else if(Array.isArray(state.finalJson.Info.Bilder)) targetArray = state.finalJson.Info.Bilder;
       else {
-        processedJson.Info.Images = [];
-        targetArray = processedJson.Info.Images;
+        // Create if missing (default to Images)
+        state.finalJson.Info.Images = [];
+        targetArray = state.finalJson.Info.Images;
       }
 
       for(const asset of unusedAssets) {
         const b64 = await compressImage(asset.blob, compress, quality, maxW);
+        // Use Full Object Structure for Fallback
         targetArray.push({
           type: 'image',
           src: b64,
-          width: asset.width,
+          width: asset.width, // Use original width
           description: '',
           compressionImmune: false,
           centering: 'default'
         });
       }
     }
-
-    // --- STRICT SANITIZATION ---
-    // This ensures the JSON structure matches exactly what the Offert app expects, preventing crashes.
-    state.finalJson = sanitizeFinalJson(processedJson);
     
     const jsonStr = JSON.stringify(state.finalJson, null, 2);
     ui.finalOut.textContent = jsonStr;
@@ -1195,47 +1145,6 @@ ui.btn3.addEventListener('click', async () => {
     ui.btn3.disabled = false;
   }
 });
-
-// --- Sanitizer Function ---
-function sanitizeFinalJson(data) {
-  if (!data || typeof data !== 'object') data = {};
-  if (!data.quote) data.quote = {};
-  
-  // Helper to fix items array
-  const fixItems = (arr) => {
-    if (!Array.isArray(arr)) return [];
-    return arr.filter(i => i && typeof i === 'object').map(item => {
-      // Fix subItems: Must be an array
-      if (item.subItems && !Array.isArray(item.subItems)) {
-        // If it's a single object, wrap it. If it's something else, empty array.
-        if (typeof item.subItems === 'object') item.subItems = [item.subItems];
-        else item.subItems = [];
-      }
-      if (!item.subItems) item.subItems = [];
-      return item;
-    });
-  };
-
-  if (data.items) data.items = fixItems(data.items);
-  if (data.optionalItems) data.optionalItems = fixItems(data.optionalItems);
-  
-  // Fix InfoImages
-  // Sometimes LLMs output a single object instead of an array
-  if (data.infoImages && !Array.isArray(data.infoImages)) {
-     if (typeof data.infoImages === 'object') data.infoImages = [data.infoImages];
-     else data.infoImages = [];
-  }
-  // Filter out nulls
-  if (data.infoImages) {
-    data.infoImages = data.infoImages.filter(i => i && typeof i === 'object');
-  }
-
-  // Ensure Company Objects are Objects (not strings)
-  if (data.companyA && typeof data.companyA !== 'object') data.companyA = { name: String(data.companyA) };
-  if (data.companyB && typeof data.companyB !== 'object') data.companyB = { name: String(data.companyB) };
-
-  return data;
-}
 
 // --- Image Compression ---
 function compressImage(blob, doCompress, quality, maxWidth) {
