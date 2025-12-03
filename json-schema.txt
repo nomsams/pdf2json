@@ -144,7 +144,7 @@
    7.2 **Text block** (type = "text"):
    - **type**: "text".
    - **content**: HTML content for the text block (paragraphs, lists, etc.) (d: "Klicka för att redigera text" or English equivalent).
-   - **centering**: Same as for images ("default" | "center" | "left") (d: "default").
+   - **centering**: Same as for images ("default" | "center" | "left") (d: "left").
 
    7.3 **Table block** (type = "table"):
    - **type**: "table".
