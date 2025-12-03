@@ -44,7 +44,6 @@
       font-family: system-ui, -apple-system, sans-serif; 
       min-height: 100vh; 
       display: flex; flex-direction: column;
-      /* Ensure scrollbar appears on body if needed */
       overflow-y: auto; 
       overflow-x: hidden;
     }
@@ -67,7 +66,6 @@
       margin: 0 auto;
       width: 100%;
       position: relative; 
-      /* Add padding bottom so logs don't cover content */
       padding-bottom: 250px; 
     }
     
@@ -638,15 +636,8 @@ async function extractImagesFromPDF(file, signal) {
         } catch(e) { continue; }
 
         if(imgObj) {
-          // Calculate Visual Top-Left Y in Viewport Space
-          // PDF Space (Bottom-Left Origin):
-          // Image is drawn in unit square [0,1]x[0,1] transformed by m.
-          // Top-Left in Image Space is (0,1).
-          // Transform (0,1) by m to get PDF coordinates.
-          const pdfX = m[2] + m[4]; // 0*m[0] + 1*m[2] + m[4]
-          const pdfY = m[3] + m[5]; // 0*m[1] + 1*m[3] + m[5]
-          
-          // Convert to Viewport (Top-Left Origin)
+          const pdfX = m[2] + m[4]; 
+          const pdfY = m[3] + m[5]; 
           const pt = viewport.convertToViewportPoint(pdfX, pdfY);
           const yPos = pt[1]; 
           
@@ -706,8 +697,8 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
   const autoOcr = document.getElementById('autoOcrToggle').classList.contains('on');
   const tableDetect = document.getElementById('tableDetectToggle').classList.contains('on');
 
-  // Filter assets based on skip count
-  const validAssets = state.assets.slice(skipCount);
+  // Filter assets based on skip count AND sort strictly by ID index to ensure correct order
+  const validAssets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
 
   for(let i=1; i<=total; i++){
     if(signal.aborted) throw new Error("Aborted");
@@ -727,8 +718,6 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
       pageMd = await ocrCanvas(canvas);
       // Append images at bottom for OCR pages (no coord info)
       const pageImages = validAssets.filter(a => a.page === i);
-      // Sort strictly by ID index
-      pageImages.sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
       
       if(pageImages.length) {
         pageMd += "\n\n";
@@ -792,25 +781,34 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   if(curBlock.items.length) blocks.push(curBlock);
 
   // 4. Interleave Images and Blocks
-  // Create a combined list of {type:'text', block} and {type:'image', img}
   const combined = [];
   blocks.forEach(b => combined.push({ type: 'text', y: b.yStart, data: b }));
   
-  // Sort images strictly by ID first to ensure relative order is correct
-  images.sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
-  
+  // Images are already sorted by ID in runLocalPDFProcessing, but we need to merge them
   images.forEach(img => combined.push({ type: 'image', y: img.yPos, data: img }));
 
-  // Sort by Y (Visual Top)
-  combined.sort((a,b) => a.y - b.y);
+  // 5. Sort Combined List
+  // IMPROVED SORTING: Prioritize ID order for images relative to each other to prevent "4 before 3"
+  combined.sort((a,b) => {
+    // If both are images, strictly follow ID order
+    if (a.type === 'image' && b.type === 'image') {
+      return getImgIndex(a.data.id) - getImgIndex(b.data.id);
+    }
+    // Otherwise, use visual Y position
+    // If Y difference is significant, use Y
+    if (Math.abs(a.y - b.y) > 15) {
+      return a.y - b.y;
+    }
+    // If Y is close, prefer text over image usually, or left-to-right
+    return 0; 
+  });
 
-  // 5. Generate Markdown
+  // 6. Generate Markdown
   let md = "";
   combined.forEach(node => {
     if(node.type === 'image') {
       md += `\n\n${CONFIG.phPrefix}${node.data.id}|W:${node.data.width}|H:${node.data.height}${CONFIG.phSuffix}\n\n`;
     } else {
-      // Convert block items to string (simplified layout analysis)
       const blockText = simpleBlockToText(node.data.items);
       md += blockText + "\n\n";
     }
@@ -1059,7 +1057,7 @@ function togglePreview() {
 }
 
 /**
- * STEP 3: ASSEMBLY
+ * STEP 3: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION)
  */
 ui.btn3.addEventListener('click', async () => {
   if(!state.groqJson) return;
@@ -1076,41 +1074,67 @@ ui.btn3.addEventListener('click', async () => {
 
     const usedImageIds = new Set();
 
-    // Recursive walker to replace placeholders
-    const processNode = async (node) => {
-      if (typeof node === 'string') {
-        if(node.startsWith(CONFIG.phPrefix) && node.endsWith(CONFIG.phSuffix)) {
-          // Extract ID from {{IMG:id|W:..|H:..}}
-          const parts = node.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|');
-          const id = parts[0];
-          
-          // Parse Width from placeholder if available
-          let phWidth = dispW;
-          const wPart = parts.find(p => p.startsWith('W:'));
-          if(wPart) phWidth = parseInt(wPart.split(':')[1]);
+    // Helper to check if a string is a placeholder
+    const isPlaceholder = (str) => typeof str === 'string' && str.startsWith(CONFIG.phPrefix) && str.endsWith(CONFIG.phSuffix);
+    
+    // Helper to extract ID from placeholder
+    const extractId = (ph) => ph.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|')[0];
 
-          const asset = state.assets.find(a => a.id === id);
-          if(asset) {
-            usedImageIds.add(id);
-            const b64 = await compressImage(asset.blob, compress, quality, maxW);
-            // Return Object Structure as per schema
-            return {
-              type: 'image',
-              src: b64,
-              width: phWidth, // Use preserved width
-              description: '',
-              compressionImmune: false,
-              centering: 'default'
-            };
-          }
-        }
-        return node;
-      } else if (Array.isArray(node)) {
+    // Recursive walker that is Context-Aware
+    const processNode = async (node) => {
+      if (Array.isArray(node)) {
         return Promise.all(node.map(processNode));
-      } else if (typeof node === 'object' && node !== null) {
+      } 
+      else if (typeof node === 'object' && node !== null) {
         const newObj = {};
-        for(let k in node) {
-          newObj[k] = await processNode(node[k]);
+        
+        // Iterate over keys to handle context
+        for (const [key, val] of Object.entries(node)) {
+          
+          // Check if the VALUE is a placeholder
+          if (isPlaceholder(val)) {
+            const id = extractId(val);
+            const asset = state.assets.find(a => a.id === id);
+            
+            if (asset) {
+              usedImageIds.add(id);
+              const b64 = await compressImage(asset.blob, compress, quality, maxW);
+              
+              // CONTEXT CHECK: Does the parent object already look like an image object?
+              // We check if sibling keys exist (like 'description', 'width', 'type') 
+              // OR if the key itself suggests it's a source field (src, url, data).
+              const isSourceKey = ['src', 'url', 'data', 'href'].includes(key.toLowerCase());
+              const hasImageProps = node.hasOwnProperty('description') || node.hasOwnProperty('width') || node.hasOwnProperty('caption');
+              
+              if (isSourceKey || hasImageProps) {
+                log(`Injecting RAW SRC for ${id} into key '${key}' (Parent detected as Image Object)`, "VERBOSE");
+                newObj[key] = b64;
+                
+                // If width is missing in the parent, we can optionally add it if the schema allows, 
+                // but usually we just fill the existing key.
+                // If the parent has 'width' set to 0 or null, we might want to update it, 
+                // but strictly we should only replace the placeholder.
+              } else {
+                // The placeholder is likely a value for a generic key (e.g., "cover_image": "{{IMG...}}")
+                // We should inject the FULL object structure here.
+                log(`Injecting FULL OBJECT for ${id} into key '${key}'`, "VERBOSE");
+                newObj[key] = {
+                  type: 'image',
+                  src: b64,
+                  width: asset.width, // Use original width or dispW
+                  description: '',
+                  compressionImmune: false,
+                  centering: 'default'
+                };
+              }
+            } else {
+              log(`Asset not found for ID: ${id}`, "WARN");
+              newObj[key] = val; // Keep placeholder if not found
+            }
+          } else {
+            // Recurse if not a placeholder
+            newObj[key] = await processNode(val);
+          }
         }
         return newObj;
       }
@@ -1127,26 +1151,22 @@ ui.btn3.addEventListener('click', async () => {
     if(unusedAssets.length > 0) {
       log(`Injecting ${unusedAssets.length} missing images into Info...`, "WARN");
       
-      // Find or Create Info object
       if(!state.finalJson.Info) state.finalJson.Info = {};
       
-      // Determine target array
       let targetArray = null;
       if(Array.isArray(state.finalJson.Info.Images)) targetArray = state.finalJson.Info.Images;
       else if(Array.isArray(state.finalJson.Info.Bilder)) targetArray = state.finalJson.Info.Bilder;
       else {
-        // Create if missing (default to Images)
         state.finalJson.Info.Images = [];
         targetArray = state.finalJson.Info.Images;
       }
 
       for(const asset of unusedAssets) {
         const b64 = await compressImage(asset.blob, compress, quality, maxW);
-        // Use Full Object Structure for Fallback
         targetArray.push({
           type: 'image',
           src: b64,
-          width: asset.width, // Use original width
+          width: asset.width,
           description: '',
           compressionImmune: false,
           centering: 'default'
