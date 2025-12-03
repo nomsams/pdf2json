@@ -27,7 +27,7 @@
       --text: #e6e6e6; --text-dim: #9aa3b6; --accent: #62d0ff; 
       --ok: #30d158; --warn: #ffcc00; --err: #ff453a; 
       --line: #1e2431; --shadow: 0 10px 30px rgba(0,0,0,.35);
-      --node: #1a2030; --pipe: #2d3346; --pipe-active: #62d0ff;
+      --node: #1a2030; --pipe: #2d3346; --pipe-active: #62d0ff; --pipe-done: #30d158;
       --highlight: #ff9f1c;
     }
     [data-theme="light"] {
@@ -35,7 +35,7 @@
       --text: #1a202c; --text-dim: #64748b; --accent: #2563eb;
       --ok: #059669; --warn: #d97706; --err: #dc2626;
       --line: #e2e8f0; --shadow: 0 4px 12px rgba(0,0,0,.05);
-      --node: #ffffff; --pipe: #cbd5e1; --pipe-active: #2563eb;
+      --node: #ffffff; --pipe: #cbd5e1; --pipe-active: #2563eb; --pipe-done: #059669;
       --highlight: #d97706;
     }
 
@@ -73,13 +73,17 @@
     
     .col { display: flex; flex-direction: column; gap: 15px; min-height: 0; z-index: 2; }
     
-    .card { background: var(--panel); border: 1px solid var(--muted); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; position: relative; transition: border-color 0.3s, opacity 0.3s; }
+    .card { background: var(--panel); border: 1px solid var(--muted); border-radius: 12px; padding: 0; box-shadow: var(--shadow); display: flex; flex-direction: column; position: relative; transition: border-color 0.3s; overflow: hidden; }
     .card:hover { border-color: var(--muted-2); }
-    .card-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
+    
+    .card-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding: 12px 16px; background: var(--muted-2); z-index: 5; }
     .card-title { font-weight: 600; font-size: 14px; color: var(--accent); }
     
-    /* Disabled Card State */
-    .card.disabled { opacity: 0.4; pointer-events: none; filter: grayscale(0.8); }
+    .card-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: opacity 0.3s; }
+    
+    /* Disabled State Logic */
+    .card.disabled .card-body { opacity: 0.3; pointer-events: none; filter: grayscale(0.8); }
+    .card.disabled .card-head { opacity: 1; pointer-events: auto; } /* Header remains active */
     
     label { font-size: 12px; font-weight: 600; color: var(--text-dim); display: block; margin-bottom: 4px; }
     input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--muted); color: var(--text); padding: 8px; border-radius: 6px; font-family: inherit; font-size: 13px; outline: none; transition: 0.2s; }
@@ -93,18 +97,11 @@
     button.primary { background: var(--accent); color: #090b10; border: none; }
     button.primary:hover { filter: brightness(1.1); color: #000; }
     
-    /* Visual Pipes */
-    .pipes-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; display: none; }
-    @media(min-width: 1100px) { .pipes-layer { display: block; } }
-    .pipe { position: absolute; height: 4px; background: var(--pipe); transition: background 0.5s, width 0.5s; border-radius: 2px; }
-    .pipe.active { background: var(--pipe-active); box-shadow: 0 0 10px var(--pipe-active); }
-    
-    /* Pipe Positioning (Approximate for 3-col layout) */
-    #pipe1 { top: 200px; left: 32%; width: 4%; } 
-    #pipe2 { top: 200px; right: 32%; width: 4%; }
-    /* Pipe 3: Bypass Translation (Step 2 -> Step 4) */
-    #pipeBypass { top: 210px; left: 33%; width: 33%; display:none; border-bottom: 2px dashed var(--pipe-active); background: transparent; height: 0; }
-    #pipeBypass.active { display: block; }
+    /* SVG Pipes Layer */
+    .pipes-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+    .flow-line { fill: none; stroke: var(--pipe); stroke-width: 3px; transition: stroke 0.5s, stroke-dashoffset 1s; }
+    .flow-line.active { stroke: var(--pipe-active); filter: drop-shadow(0 0 4px var(--pipe-active)); }
+    .flow-line.done { stroke: var(--pipe-done); filter: drop-shadow(0 0 4px var(--pipe-done)); }
 
     .drop { border: 2px dashed var(--muted); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
     .drop:hover, .drop.drag { border-color: var(--accent); background: rgba(98, 208, 255, 0.05); }
@@ -156,66 +153,64 @@
 </header>
 
 <main>
-  <!-- Visual Pipes -->
-  <div class="pipes-layer">
-    <div id="pipe1" class="pipe"></div>
-    <div id="pipe2" class="pipe"></div>
-    <div id="pipeBypass" class="pipe"></div>
-  </div>
+  <!-- Visual Pipes SVG -->
+  <svg class="pipes-layer" id="flowSvg"></svg>
 
   <!-- COLUMN 1: PDF & OCR -->
   <div class="col">
-    <div class="card">
+    <div class="card" id="cardStep1">
       <div class="card-head">
         <span class="card-title">1. Input & Smart Extraction</span>
         <span class="badge">Local / DeepSeek</span>
       </div>
       
-      <div id="dropZone" class="drop">
-        <strong>Drop PDF Here</strong><br>
-        <span style="font-size:11px; color:var(--text-dim)">or click to browse</span>
-        <input type="file" id="fileInput" accept="application/pdf" hidden>
-      </div>
-      
-      <div class="settings-group">
-        <label>Extraction Method</label>
-        <select id="extractMode">
-          <option value="local">Local Enhanced (Smart Placement)</option>
-          <option value="deepseek">DeepSeek API (Cloud)</option>
-        </select>
-      </div>
-
-      <!-- Local Settings -->
-      <div id="localSettings" class="settings-group">
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px">
-          <label style="margin:0">Auto-OCR (Sparse Text)</label>
-          <div id="autoOcrToggle" class="switch on"></div>
+      <div class="card-body">
+        <div id="dropZone" class="drop">
+          <strong>Drop PDF Here</strong><br>
+          <span style="font-size:11px; color:var(--text-dim)">or click to browse</span>
+          <input type="file" id="fileInput" accept="application/pdf" hidden>
         </div>
-        <div style="display:flex; justify-content:space-between;">
-          <label style="margin:0">Table Detection</label>
-          <div id="tableDetectToggle" class="switch on"></div>
+        
+        <div class="settings-group">
+          <label>Extraction Method</label>
+          <select id="extractMode">
+            <option value="local">Local Enhanced (Smart Placement)</option>
+            <option value="deepseek">DeepSeek API (Cloud)</option>
+          </select>
         </div>
-      </div>
 
-      <!-- DeepSeek Settings -->
-      <div id="deepseekSettings" class="settings-group hidden">
-        <label>API Endpoint</label>
-        <input id="ocrEndpoint" type="text" value="https://api.alphaxiv.org/models/v1/deepseek/deepseek-ocr/inference">
-        <label style="margin-top:5px">Proxy (Optional)</label>
-        <input id="ocrProxy" type="text" placeholder="https://your-proxy.com/...">
-      </div>
-
-      <div class="btn-row">
-        <button id="btnStep1" class="primary" disabled>Run Extraction</button>
-        <button id="btnCancel1" disabled>Cancel</button>
-      </div>
-
-      <div>
-        <div class="status">
-          <span id="status1">Waiting for file...</span>
-          <span id="progText1">0%</span>
+        <!-- Local Settings -->
+        <div id="localSettings" class="settings-group">
+          <div style="display:flex; justify-content:space-between; margin-bottom:5px">
+            <label style="margin:0">Auto-OCR (Sparse Text)</label>
+            <div id="autoOcrToggle" class="switch on"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <label style="margin:0">Table Detection</label>
+            <div id="tableDetectToggle" class="switch on"></div>
+          </div>
         </div>
-        <div class="progress-wrap"><div id="progBar1" class="progress-bar"></div></div>
+
+        <!-- DeepSeek Settings -->
+        <div id="deepseekSettings" class="settings-group hidden">
+          <label>API Endpoint</label>
+          <input id="ocrEndpoint" type="text" value="https://api.alphaxiv.org/models/v1/deepseek/deepseek-ocr/inference">
+          <label style="margin-top:5px">Proxy (Optional)</label>
+          <input id="ocrProxy" type="text" placeholder="https://your-proxy.com/...">
+        </div>
+
+        <div class="btn-row">
+          <button id="btnStep1" class="primary" disabled>Run Extraction</button>
+          <button id="btnCancel1" disabled>Cancel</button>
+        </div>
+
+        <div>
+          <div class="status">
+            <span id="status1">Waiting for file...</span>
+            <span id="progText1">0%</span>
+          </div>
+          <div class="progress-wrap"><div id="progBar1" class="progress-bar"></div></div>
+        </div>
       </div>
     </div>
 
@@ -225,64 +220,80 @@
         <span class="card-title">Extracted Assets</span>
         <span style="font-size:10px; color:var(--text-dim)">Click to toggle selection</span>
       </div>
-      <div id="gallery" class="gallery"></div>
-      <label style="margin-top:10px">Markdown Output (Placeholders Injected)</label>
-      <!-- Increased Height for Objective 4 -->
-      <div id="mdOutput" class="preview-box" style="height:500px"></div>
+      <div class="card-body" style="flex:1; overflow:hidden;">
+        <div id="gallery" class="gallery"></div>
+        <label style="margin-top:10px">Markdown Output (Placeholders Injected)</label>
+        <!-- Increased Height for Objective 4 -->
+        <div id="mdOutput" class="preview-box" style="height:500px"></div>
+      </div>
     </div>
   </div>
 
   <!-- COLUMN 2: Groq & Schema -->
   <div class="col">
-    <div class="card">
+    <div class="card" id="cardStep2">
       <div class="card-head">
         <span class="card-title">2. Structure Data</span>
         <span class="badge">Groq LLM</span>
       </div>
 
-      <div class="btn-row">
-        <div style="flex:1">
-          <label>Groq API Key</label>
-          <input id="groqKey" type="password" placeholder="gsk_...">
-        </div>
-      </div>
-
-      <div class="btn-row">
-        <div style="flex:1">
-          <label>Model</label>
-          <select id="groqModel">
-            <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
-            <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-          </select>
-        </div>
-        <div style="flex:1">
-          <label>CORS Proxy</label>
-          <div style="display:flex; align-items:center; height:36px;">
-            <div id="corsToggle" class="switch on" title="Use corsproxy.io"></div>
-            <span style="font-size:11px; margin-left:8px">Enabled</span>
+      <div class="card-body">
+        <div class="btn-row">
+          <div style="flex:1">
+            <label>Groq API Key</label>
+            <input id="groqKey" type="password" placeholder="gsk_...">
           </div>
         </div>
-      </div>
 
-      <div>
-        <label>JSON Schema</label>
-        <div style="display:flex; gap:5px">
-          <input type="file" id="schemaFile" accept=".json,.txt" style="width:70%">
-          <button id="loadDefaultSchema" style="width:30%">Load Default</button>
+        <div class="btn-row">
+          <div style="flex:1">
+            <label>Model</label>
+            <select id="groqModel">
+              <option value="openai/gpt-oss-120b" selected>gpt-oss-120b (Default)</option>
+              <option value="openai/gpt-oss-20b">gpt-oss-20b</option>
+              <option value="moonshotai/kimi-k2-instruct-0905">kimi-k2-instruct</option>
+              <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label>Reasoning Effort</label>
+            <select id="reasoningEffort">
+                <option value="high" selected>High</option>
+                <option value="medium">Medium</option>
+            </select>
+          </div>
         </div>
-        <textarea id="schemaInput" placeholder="Paste JSON Schema here..." style="margin-top:5px; height:60px"></textarea>
-      </div>
+        
+        <div class="btn-row">
+             <div style="flex:1">
+              <label>CORS Proxy</label>
+              <div style="display:flex; align-items:center; height:36px;">
+                <div id="corsToggle" class="switch on" title="Use corsproxy.io"></div>
+                <span style="font-size:11px; margin-left:8px">Enabled</span>
+              </div>
+            </div>
+        </div>
 
-      <div>
-        <label>Prompt Instruction</label>
-        <textarea id="groqPrompt" style="height:120px">Output a json using the text provided while modeling the json according to the json schema provided. That is create a json according to json schema and populate with the text from the text provided. Most text is in chronologial order. !IMPORTATN make sure not to summarize anything !IMPORTANT keep the image placeholder tags in exactly the same form/name and in the same place / order as in the original text compared ot the rest of the json structure !IMPORTANT accuracy is very important</textarea>
-      </div>
+        <div>
+          <label>JSON Schema</label>
+          <div style="display:flex; gap:5px">
+            <input type="file" id="schemaFile" accept=".json,.txt" style="width:70%">
+            <button id="loadDefaultSchema" style="width:30%">Load Default</button>
+          </div>
+          <textarea id="schemaInput" placeholder="Paste JSON Schema here..." style="margin-top:5px; height:60px"></textarea>
+        </div>
 
-      <button id="btnStep2" class="primary" style="width:100%" disabled>Run Structuring</button>
+        <div>
+          <label>Prompt Instruction</label>
+          <textarea id="groqPrompt" style="height:120px">Output a json using the text provided while modeling the json according to the json schema provided. That is create a json according to json schema and populate with the text from the text provided. Most text is in chronologial order. !IMPORTATN make sure not to summarize anything !IMPORTANT keep the image placeholder tags in exactly the same form/name and in the same place / order as in the original text compared ot the rest of the json structure !IMPORTANT accuracy is very important</textarea>
+        </div>
 
-      <div>
-        <div class="status"><span id="status2">Idle</span></div>
-        <div class="progress-wrap"><div id="progBar2" class="progress-bar"></div></div>
+        <button id="btnStep2" class="primary" style="width:100%" disabled>Run Structuring</button>
+
+        <div>
+          <div class="status"><span id="status2">Idle</span></div>
+          <div class="progress-wrap"><div id="progBar2" class="progress-bar"></div></div>
+        </div>
       </div>
     </div>
 
@@ -292,16 +303,18 @@
         <span class="card-title">Input Preview (To Groq)</span>
         <button style="width:auto; padding:2px 8px; font-size:10px" onclick="togglePreview()">Toggle Output</button>
       </div>
-      <div id="groqInputPreview" class="preview-box" style="display:block; border-bottom:1px solid var(--line); margin-bottom:10px; height:150px;"></div>
-      
-      <div class="card-head">
-        <span class="card-title">Groq Output (JSON)</span>
-        <div style="display:flex; gap:5px">
-          <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('jsonOutput')">Copy</button>
-          <button style="width:auto; padding:2px 8px; font-size:10px" id="btnDownloadGroq">Download</button>
+      <div class="card-body" style="flex:1; overflow:hidden;">
+        <div id="groqInputPreview" class="preview-box" style="display:block; border-bottom:1px solid var(--line); margin-bottom:10px; height:150px;"></div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <span class="card-title" style="font-size:12px;">Groq Output (JSON)</span>
+            <div style="display:flex; gap:5px">
+              <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('jsonOutput')">Copy</button>
+              <button style="width:auto; padding:2px 8px; font-size:10px" id="btnDownloadGroq">Download</button>
+            </div>
         </div>
+        <div id="jsonOutput" class="preview-box" style="height:150px"></div>
       </div>
-      <div id="jsonOutput" class="preview-box" style="height:150px"></div>
     </div>
   </div>
 
@@ -317,122 +330,126 @@
         </div>
       </div>
 
-      <div class="btn-row">
-        <div style="flex:1">
-          <label>DeepL API Key</label>
-          <input id="deeplKey" type="password" placeholder="xxxxxxxx:fx">
-        </div>
-        <div style="flex:1">
-          <label>CORS Proxy</label>
-          <div style="display:flex; align-items:center; height:36px;">
-            <div id="deeplCorsToggle" class="switch on" title="Use corsproxy.io"></div>
-            <span style="font-size:11px; margin-left:8px">Enabled</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="btn-row">
-        <div style="flex:1">
-          <label>Source Language</label>
-          <select id="deeplSource">
-            <option value="">Auto Detect</option>
-            <option value="EN">English (EN)</option>
-            <option value="SV">Swedish (SV)</option>
-            <option value="DE">German (DE)</option>
-            <option value="ES">Spanish (ES)</option>
-            <option value="FR">French (FR)</option>
-            <option value="IT">Italian (IT)</option>
-            <option value="NL">Dutch (NL)</option>
-            <option value="PL">Polish (PL)</option>
-            <option value="PT">Portuguese (PT)</option>
-          </select>
-        </div>
-        <div style="flex:1">
-          <label>Target Language</label>
-          <select id="deeplTarget">
-            <option value="SV" selected>Swedish (SV)</option>
-            <option value="EN">English (EN)</option>
-            <option value="DE">German (DE)</option>
-            <option value="ES">Spanish (ES)</option>
-            <option value="FR">French (FR)</option>
-            <option value="IT">Italian (IT)</option>
-            <option value="NL">Dutch (NL)</option>
-            <option value="PL">Polish (PL)</option>
-            <option value="PT">Portuguese (PT)</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label>JSON Source</label>
+      <div class="card-body">
         <div class="btn-row">
-          <button id="btnTransFromGroq">Use Groq Output</button>
-          <button id="btnTransUpload">Upload JSON</button>
-          <input type="file" id="transFile" accept=".json,.txt,application/json" style="display:none">
-        </div>
-      </div>
-
-      <div style="margin-top:8px">
-        <label>JSON To Translate</label>
-        <div id="transInputPreview" class="preview-box" style="height:120px"></div>
-      </div>
-
-      <button id="btnTransRun" class="primary" style="width:100%; margin-top:8px">Run Translation</button>
-
-      <div>
-        <div class="status"><span id="statusTrans">Idle</span></div>
-        <div class="progress-wrap"><div id="progBarTrans" class="progress-bar"></div></div>
-      </div>
-
-      <div style="margin-top:8px">
-        <div class="card-head" style="padding-left:0; padding-right:0; border-bottom:none; margin-bottom:4px;">
-          <span class="card-title">Translated JSON</span>
-          <div style="display:flex; gap:5px">
-            <button style="width:auto; padding:2px 8px; font-size:10px" id="btnTransCopy">Copy</button>
-            <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" id="btnTransDownload">Download</button>
+          <div style="flex:1">
+            <label>DeepL API Key</label>
+            <input id="deeplKey" type="password" placeholder="xxxxxxxx:fx">
+          </div>
+          <div style="flex:1">
+            <label>CORS Proxy</label>
+            <div style="display:flex; align-items:center; height:36px;">
+              <div id="deeplCorsToggle" class="switch on" title="Use corsproxy.io"></div>
+              <span style="font-size:11px; margin-left:8px">Enabled</span>
+            </div>
           </div>
         </div>
-        <div id="transOutputPreview" class="preview-box" style="height:120px"></div>
+
+        <div class="btn-row">
+          <div style="flex:1">
+            <label>Source Language</label>
+            <select id="deeplSource">
+              <option value="">Auto Detect</option>
+              <option value="EN">English (EN)</option>
+              <option value="SV">Swedish (SV)</option>
+              <option value="DE">German (DE)</option>
+              <option value="ES">Spanish (ES)</option>
+              <option value="FR">French (FR)</option>
+              <option value="IT">Italian (IT)</option>
+              <option value="NL">Dutch (NL)</option>
+              <option value="PL">Polish (PL)</option>
+              <option value="PT">Portuguese (PT)</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label>Target Language</label>
+            <select id="deeplTarget">
+              <option value="SV" selected>Swedish (SV)</option>
+              <option value="EN">English (EN)</option>
+              <option value="DE">German (DE)</option>
+              <option value="ES">Spanish (ES)</option>
+              <option value="FR">French (FR)</option>
+              <option value="IT">Italian (IT)</option>
+              <option value="NL">Dutch (NL)</option>
+              <option value="PL">Polish (PL)</option>
+              <option value="PT">Portuguese (PT)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label>JSON Source</label>
+          <div class="btn-row">
+            <button id="btnTransFromGroq">Use Groq Output</button>
+            <button id="btnTransUpload">Upload JSON</button>
+            <input type="file" id="transFile" accept=".json,.txt,application/json" style="display:none">
+          </div>
+        </div>
+
+        <div style="margin-top:8px">
+          <label>JSON To Translate</label>
+          <div id="transInputPreview" class="preview-box" style="height:120px"></div>
+        </div>
+
+        <button id="btnTransRun" class="primary" style="width:100%; margin-top:8px">Run Translation</button>
+
+        <div>
+          <div class="status"><span id="statusTrans">Idle</span></div>
+          <div class="progress-wrap"><div id="progBarTrans" class="progress-bar"></div></div>
+        </div>
+
+        <div style="margin-top:8px">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span class="card-title" style="font-size:12px;">Translated JSON</span>
+            <div style="display:flex; gap:5px">
+              <button style="width:auto; padding:2px 8px; font-size:10px" id="btnTransCopy">Copy</button>
+              <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" id="btnTransDownload">Download</button>
+            </div>
+          </div>
+          <div id="transOutputPreview" class="preview-box" style="height:120px"></div>
+        </div>
       </div>
     </div>
 
     <!-- STEP 4: Final Assembly -->
-    <div class="card">
+    <div class="card" id="cardStep4">
       <div class="card-head">
         <span class="card-title">4. Final Assembly</span>
         <span class="badge">Image Injection</span>
       </div>
 
-      <div class="btn-row">
-        <div style="flex:1">
-          <label>Compress Images</label>
-          <!-- DEFAULT ON -->
-          <div id="compressToggle" class="switch on"></div>
+      <div class="card-body">
+        <div class="btn-row">
+          <div style="flex:1">
+            <label>Compress Images</label>
+            <!-- DEFAULT ON -->
+            <div id="compressToggle" class="switch on"></div>
+          </div>
+          <div style="flex:1">
+            <label>Quality (0.1-1.0)</label>
+            <!-- DEFAULT 0.8 -->
+            <input type="number" id="imgQuality" value="0.8" step="0.1" max="1">
+          </div>
         </div>
-        <div style="flex:1">
-          <label>Quality (0.1-1.0)</label>
-          <!-- DEFAULT 0.8 -->
-          <input type="number" id="imgQuality" value="0.8" step="0.1" max="1">
-        </div>
-      </div>
 
-      <div class="btn-row">
-        <div style="flex:1">
-          <label>Max Width (px)</label>
-          <!-- DEFAULT 1280 -->
-          <input type="number" id="imgMaxWidth" value="1280">
+        <div class="btn-row">
+          <div style="flex:1">
+            <label>Max Width (px)</label>
+            <!-- DEFAULT 1280 -->
+            <input type="number" id="imgMaxWidth" value="1280">
+          </div>
+          <div style="flex:1">
+            <label>JSON Display Width</label>
+            <input type="number" id="jsonDispWidth" value="400">
+          </div>
         </div>
-        <div style="flex:1">
-          <label>JSON Display Width</label>
-          <input type="number" id="jsonDispWidth" value="400">
+
+        <button id="btnStep3" class="primary" style="width:100%; margin-top:10px" disabled>Inject Images & Finalize</button>
+
+        <div>
+          <div class="status"><span id="status3">Idle</span></div>
+          <div class="progress-wrap"><div id="progBar3" class="progress-bar"></div></div>
         </div>
-      </div>
-
-      <button id="btnStep3" class="primary" style="width:100%; margin-top:10px" disabled>Inject Images & Finalize</button>
-
-      <div>
-        <div class="status"><span id="status3">Idle</span></div>
-        <div class="progress-wrap"><div id="progBar3" class="progress-bar"></div></div>
       </div>
     </div>
 
@@ -445,12 +462,14 @@
           <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" id="btnDownload">Download</button>
         </div>
       </div>
-      <div id="finalJson" class="preview-box" style="flex:1"></div>
-      
-      <!-- BTK Integration Buttons -->
-      <div style="margin-top:10px; display:flex; gap:8px;">
-        <button id="btnOpenBtkLocal" style="background-color:#2d3346; border:1px solid var(--accent); color:var(--accent);">Open in BTK (Local)</button>
-        <button id="btnOpenBtkUrl" style="background-color:#2d3346; border:1px solid var(--accent); color:var(--accent);">Open in BTK (URL)</button>
+      <div class="card-body" style="flex:1; overflow:hidden;">
+        <div id="finalJson" class="preview-box" style="flex:1"></div>
+        
+        <!-- BTK Integration Buttons -->
+        <div style="margin-top:10px; display:flex; gap:8px;">
+          <button id="btnOpenBtkLocal" style="background-color:#2d3346; border:1px solid var(--accent); color:var(--accent);">Open in BTK (Local)</button>
+          <button id="btnOpenBtkUrl" style="background-color:#2d3346; border:1px solid var(--accent); color:var(--accent);">Open in BTK (URL)</button>
+        </div>
       </div>
     </div>
   </div>
@@ -491,6 +510,8 @@ const state = {
   file: null,
   assets: [], // { id, page, width, height, blob, url, matrix, yPos }
   selectedImageIds: new Set(), // IDs of images selected by user
+  layoutData: [], // Stores the structured layout (text blocks + image slots) for dynamic regeneration
+  rawDeepSeekText: "", // Stores raw text for DeepSeek mode
   markdown: "",
   groqJson: "",
   finalJson: null,
@@ -502,7 +523,12 @@ const state = {
   transOutputRaw: "",
   transSourceName: "",
   // JSON used by assembly step (can be Groq output or translated JSON)
-  currentJsonForAssembly: ""
+  currentJsonForAssembly: "",
+  // Flow State
+  step1Done: false,
+  step2Done: false,
+  step3Done: false,
+  step4Done: false
 };
 
 // UI References
@@ -523,6 +549,8 @@ const ui = {
   btn2: document.getElementById('btnStep2'),
   groqInputPreview: document.getElementById('groqInputPreview'),
   jsonOut: document.getElementById('jsonOutput'),
+  groqModel: document.getElementById('groqModel'),
+  reasoningEffort: document.getElementById('reasoningEffort'),
   
   // Translation UI
   cardTranslation: document.getElementById('cardTranslation'),
@@ -550,7 +578,8 @@ const ui = {
   btnOpenBtkLocal: document.getElementById('btnOpenBtkLocal'),
   btnOpenBtkUrl: document.getElementById('btnOpenBtkUrl'),
   
-  logs: document.getElementById('logBody')
+  logs: document.getElementById('logBody'),
+  flowSvg: document.getElementById('flowSvg')
 };
 
 /**
@@ -589,19 +618,12 @@ const ui = {
     ui.transToggle.classList.toggle('on', state.translationEnabled);
     ui.cardTranslation.classList.toggle('disabled', !state.translationEnabled);
     
-    // Update Flow Visualization
-    const pipeBypass = document.getElementById('pipeBypass');
-    if(state.translationEnabled) {
-        pipeBypass.classList.remove('active');
-    } else {
-        pipeBypass.classList.add('active');
-    }
     log(`Translation Module ${state.translationEnabled ? 'Enabled' : 'Disabled'}`, "INFO");
+    drawFlow(); // Redraw lines
   });
   
   // Initial State for Translation (Disabled)
   ui.cardTranslation.classList.add('disabled');
-  document.getElementById('pipeBypass').classList.add('active');
 
   // Load Schema (Try .txt first, then .json)
   const loadSchema = async () => {
@@ -634,6 +656,11 @@ const ui = {
         el.addEventListener('click', () => el.classList.toggle('on'));
     }
   });
+
+  // Window Resize for Pipes
+  window.addEventListener('resize', drawFlow);
+  // Initial Draw
+  setTimeout(drawFlow, 500);
 
   log("System Ready. PDF.js Worker: " + pdfjsLib.GlobalWorkerOptions.workerSrc);
 })();
@@ -694,6 +721,72 @@ function getImgIndex(id) {
 }
 
 /**
+ * FLOW VISUALIZATION (PIPES)
+ */
+function drawFlow() {
+    const svg = ui.flowSvg;
+    svg.innerHTML = ''; // Clear
+    
+    const c1 = document.getElementById('cardStep1').getBoundingClientRect();
+    const c2 = document.getElementById('cardStep2').getBoundingClientRect();
+    const c3 = document.getElementById('cardTranslation').getBoundingClientRect();
+    const c4 = document.getElementById('cardStep4').getBoundingClientRect();
+    const main = document.querySelector('main').getBoundingClientRect();
+    
+    // Helper to get relative coords
+    const getPos = (rect, side) => {
+        const x = side === 'left' ? rect.left - main.left : rect.right - main.left;
+        const y = rect.top - main.top + (rect.height / 2);
+        return { x, y };
+    };
+
+    const createPath = (start, end, colorClass) => {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        // Bezier curve
+        const d = `M ${start.x} ${start.y} C ${start.x + 50} ${start.y}, ${end.x - 50} ${end.y}, ${end.x} ${end.y}`;
+        path.setAttribute("d", d);
+        path.setAttribute("class", "flow-line " + colorClass);
+        svg.appendChild(path);
+    };
+
+    // 1 -> 2
+    const p1 = getPos(c1, 'right');
+    const p2 = getPos(c2, 'left');
+    createPath(p1, p2, state.step1Done ? 'done' : 'active');
+
+    // 2 -> 3 (Translation)
+    const p2r = getPos(c2, 'right');
+    const p3l = getPos(c3, 'left');
+    let class2to3 = 'flow-line';
+    if (state.translationEnabled) {
+        class2to3 = state.step2Done ? (state.step3Done ? 'done' : 'active') : 'active';
+    }
+    createPath(p2r, p3l, class2to3);
+
+    // 3 -> 4 (Translation -> Assembly)
+    // Internal flow in column 3, but let's draw it for clarity if enabled
+    if (state.translationEnabled) {
+        const p3b = { x: p3l.x + c3.width/2, y: c3.bottom - main.top };
+        const p4t = { x: p3l.x + c3.width/2, y: c4.top - main.top };
+        // Straight line down
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const d = `M ${p3b.x} ${p3b.y} L ${p4t.x} ${p4t.y}`;
+        path.setAttribute("d", d);
+        path.setAttribute("class", "flow-line " + (state.step3Done ? 'done' : 'active'));
+        svg.appendChild(path);
+    }
+
+    // 2 -> 4 (Bypass)
+    const p4l = getPos(c4, 'left');
+    let class2to4 = 'flow-line';
+    if (!state.translationEnabled) {
+        class2to4 = state.step2Done ? (state.step4Done ? 'done' : 'active') : 'active';
+    }
+    createPath(p2r, p4l, class2to4);
+}
+
+
+/**
  * STEP 1: PDF INPUT & EXTRACTION
  */
 ui.drop.addEventListener('click', () => ui.fileIn.click());
@@ -737,30 +830,30 @@ ui.btn1.addEventListener('click', async () => {
     
     log(`Found ${state.assets.length} images. Selected ${state.selectedImageIds.size} by default.`, "VERBOSE");
 
-    let rawText = "";
-
     if (mode === 'local') {
       // 2a. Local Enhanced Processing (Smart Placement)
       log("Starting Local Layout Analysis...", "INFO");
       setProgress(1, 30, "Analyzing Layout...");
-      rawText = await runLocalPDFProcessing(state.file, signal);
+      // Store structured layout data
+      state.layoutData = await runLocalPDFProcessing(state.file, signal);
     } else {
       // 2b. DeepSeek OCR
       log("Starting DeepSeek OCR...", "INFO");
       setProgress(1, 30, "Negotiating OCR...");
-      rawText = await runDeepSeekOCR(state.file, signal);
-      rawText = injectPlaceholdersSimple(rawText);
+      state.rawDeepSeekText = await runDeepSeekOCR(state.file, signal);
     }
     
-    state.markdown = rawText;
-    ui.mdOut.innerHTML = highlightPlaceholders(state.markdown);
+    // Generate Markdown based on current selection
+    updateMarkdownOutput();
     
     setProgress(1, 100, "Extraction Complete");
     log("Step 1 Complete", "SUCCESS");
     
+    state.step1Done = true;
+    drawFlow();
+    
     // Enable Step 2
     ui.btn2.disabled = false;
-    document.getElementById('pipe1').classList.add('active');
 
   } catch (e) {
     if (signal.aborted) log("Step 1 Cancelled", "WARN");
@@ -779,9 +872,13 @@ ui.btnCancel1.addEventListener('click', () => {
 function resetStep1() {
   state.assets = [];
   state.selectedImageIds.clear();
+  state.layoutData = [];
+  state.rawDeepSeekText = "";
   state.markdown = "";
   ui.gallery.innerHTML = "";
   ui.mdOut.innerHTML = "";
+  state.step1Done = false;
+  drawFlow();
   setProgress(1, 0, "Starting...");
 }
 
@@ -899,6 +996,32 @@ function toggleImageSelection(id, divElement) {
         state.selectedImageIds.add(id);
         divElement.classList.add('selected');
     }
+    // Regenerate Markdown immediately
+    updateMarkdownOutput();
+}
+
+function updateMarkdownOutput() {
+    let md = "";
+    const mode = ui.extractMode.value;
+
+    if (mode === 'local') {
+        // Reconstruct from layoutData
+        state.layoutData.forEach(node => {
+            if (node.type === 'image') {
+                if (state.selectedImageIds.has(node.data.id)) {
+                    md += `\n\n${CONFIG.phPrefix}${node.data.id}|W:${node.data.width}|H:${node.data.height}${CONFIG.phSuffix}\n\n`;
+                }
+            } else {
+                md += node.content + "\n\n";
+            }
+        });
+    } else {
+        // DeepSeek Mode: Raw text + Append selected images
+        md = injectPlaceholdersSimple(state.rawDeepSeekText);
+    }
+
+    state.markdown = md.trim();
+    ui.mdOut.innerHTML = highlightPlaceholders(state.markdown);
 }
 
 // --- LOCAL PDF PROCESSING (Smart Placement) ---
@@ -906,13 +1029,13 @@ async function runLocalPDFProcessing(file, signal) {
   const buf = await file.arrayBuffer();
   const doc = await pdfjsLib.getDocument(buf).promise;
   const total = doc.numPages;
-  let fullMarkdown = "";
+  let layoutData = [];
 
   const autoOcr = document.getElementById('autoOcrToggle').classList.contains('on');
   const tableDetect = document.getElementById('tableDetectToggle').classList.contains('on');
 
-  // Filter assets based on SELECTION
-  const validAssets = state.assets.filter(a => state.selectedImageIds.has(a.id)).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+  // Sort assets strictly by ID index
+  const sortedAssets = state.assets.sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
 
   for(let i=1; i<=total; i++){
     if(signal.aborted) throw new Error("Aborted");
@@ -920,38 +1043,41 @@ async function runLocalPDFProcessing(file, signal) {
     
     const page = await doc.getPage(i);
     const viewport = page.getViewport({ scale: 1.0 });
-    let pageMd = "";
     
     // 1. Get Text Content
     const textContent = await page.getTextContent({ normalizeWhitespace:true });
     const sparse = isTextSparse(textContent);
     
+    let pageNodes = [];
+
     if(sparse && autoOcr) {
       log(`Page ${i}: Sparse text. Running Tesseract...`, "WARN");
       const canvas = await renderPageToCanvas(page, 2.0);
-      pageMd = await ocrCanvas(canvas);
-      // Append images at bottom for OCR pages (no coord info)
-      const pageImages = validAssets.filter(a => a.page === i);
+      const ocrText = await ocrCanvas(canvas);
+      pageNodes.push({ type: 'text', content: ocrText });
       
-      if(pageImages.length) {
-        pageMd += "\n\n";
-        pageImages.forEach(img => pageMd += `\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}`);
-      }
+      // Append images at bottom for OCR pages
+      const pageImages = sortedAssets.filter(a => a.page === i);
+      pageImages.forEach(img => {
+          pageNodes.push({ type: 'image', data: img });
+      });
+
     } else {
       // Smart Interleaving
-      const pageImages = validAssets.filter(a => a.page === i);
-      pageMd = mergeImagesIntoMarkdown(textContent, pageImages, viewport, { tableDetect, mergeHyphens: true });
+      const pageImages = sortedAssets.filter(a => a.page === i);
+      pageNodes = mergeImagesIntoLayout(textContent, pageImages, viewport, { tableDetect, mergeHyphens: true });
     }
 
-    fullMarkdown += (pageMd ? pageMd + "\n\n" : "") + "---\n\n";
+    layoutData = layoutData.concat(pageNodes);
+    layoutData.push({ type: 'text', content: "---" }); // Page break marker
   }
 
-  return fullMarkdown.trim();
+  return layoutData;
 }
 
-// --- Smart Interleaving Algorithm ---
-function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
-  // 1. Convert Text Items to Viewport Coordinates (Top-Left Origin)
+// --- Smart Interleaving Algorithm (Returns Nodes) ---
+function mergeImagesIntoLayout(textContent, images, viewport, opts) {
+  // 1. Convert Text Items
   const items = textContent.items.map(it => {
     const tx = it.transform[4];
     const ty = it.transform[5] + it.height; 
@@ -967,7 +1093,7 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
     };
   });
 
-  // 2. Sort Text by Y (Top to Bottom)
+  // 2. Sort Text
   items.sort((a,b) => a.y - b.y || a.x - b.x);
 
   // 3. Group Text into Paragraphs/Blocks
@@ -983,7 +1109,6 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   for(let i=1; i<items.length; i++) {
     const it = items[i];
     const prev = items[i-1];
-    // New block if vertical gap is large (> 20px)
     if(Math.abs(it.y - prev.y) > 20) {
       blocks.push(curBlock);
       curBlock = { yStart: it.y, yEnd: it.y, items: [it] };
@@ -997,12 +1122,9 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   // 4. Interleave Images and Blocks
   const combined = [];
   blocks.forEach(b => combined.push({ type: 'text', y: b.yStart, data: b }));
-  
-  // Images are already sorted by ID in runLocalPDFProcessing, but we need to merge them
   images.forEach(img => combined.push({ type: 'image', y: img.yPos, data: img }));
 
   // 5. Sort Combined List
-  // Prioritize ID order for images relative to each other
   combined.sort((a,b) => {
     if (a.type === 'image' && b.type === 'image') {
       return getImgIndex(a.data.id) - getImgIndex(b.data.id);
@@ -1013,18 +1135,18 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
     return 0; 
   });
 
-  // 6. Generate Markdown
-  let md = "";
+  // 6. Generate Layout Nodes
+  const nodes = [];
   combined.forEach(node => {
     if(node.type === 'image') {
-      md += `\n\n${CONFIG.phPrefix}${node.data.id}|W:${node.data.width}|H:${node.data.height}${CONFIG.phSuffix}\n\n`;
+      nodes.push({ type: 'image', data: node.data });
     } else {
       const blockText = simpleBlockToText(node.data.items);
-      md += blockText + "\n\n";
+      nodes.push({ type: 'text', content: blockText });
     }
   });
 
-  return md.trim();
+  return nodes;
 }
 
 function simpleBlockToText(items) {
@@ -1211,6 +1333,7 @@ ui.btn2.addEventListener('click', async () => {
   setProgress(2, 10, "Preparing Request...");
   
   const model = document.getElementById('groqModel').value;
+  const reasoningEffort = document.getElementById('reasoningEffort').value;
   const useProxy = document.getElementById('corsToggle').classList.contains('on');
   const prompt = document.getElementById('groqPrompt').value;
 
@@ -1231,19 +1354,33 @@ ui.btn2.addEventListener('click', async () => {
     let url = "https://api.groq.com/openai/v1/chat/completions";
     if(useProxy) url = "https://corsproxy.io/?" + encodeURIComponent(url);
 
+    // Construct Payload
+    const payload = {
+        model: model,
+        messages: messages,
+        temperature: 0.1, // Default low temp
+        top_p: 1,
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" }
+    };
+
+    // Add reasoning_format if model is 120b (assuming it supports it via this param or similar)
+    // Note: 'reasoning_format' is specific to some providers. If Groq standardizes on 'reasoning_effort' for O1-like models, use that.
+    // For now, we pass it as a top-level param if the model matches.
+    if (model === 'openai/gpt-oss-120b') {
+        // payload.reasoning_format = reasoningEffort === 'high' ? 'parsed' : 'raw'; // Example
+        // Since specific API support varies, we'll just log it for now or append to system prompt if needed.
+        // Actually, let's append it to the system prompt to be safe as a directive.
+        messages[0].content += ` Reasoning Effort: ${reasoningEffort.toUpperCase()}.`;
+    }
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${key}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.2,
-        max_completion_tokens: 8192,
-        response_format: { type: "json_object" }
-      })
+      body: JSON.stringify(payload)
     });
 
     if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
@@ -1266,8 +1403,10 @@ ui.btn2.addEventListener('click', async () => {
     setProgress(2, 100, "Structuring Complete");
     log("Step 2 Complete", "SUCCESS");
     
+    state.step2Done = true;
+    drawFlow();
+    
     ui.btn3.disabled = false;
-    document.getElementById('pipe2').classList.add('active');
 
   } catch(e) {
     log(e.message, "ERR");
@@ -1526,6 +1665,9 @@ async function runTranslation() {
     ui.transOutputPreview.textContent = outStr;
     setTransProgress(100, "Translation complete");
     log("Translation step complete.", "SUCCESS");
+    
+    state.step3Done = true;
+    drawFlow();
 
   } catch(e) {
     log("Translation failed: " + e.message, "ERR");
@@ -1681,6 +1823,9 @@ ui.btn3.addEventListener('click', async () => {
     
     setProgress(3, 100, "Assembly Complete");
     log("Step 4 Complete", "SUCCESS");
+    
+    state.step4Done = true;
+    drawFlow();
 
   } catch(e) {
     log(e.message, "ERR");
