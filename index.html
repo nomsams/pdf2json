@@ -39,13 +39,13 @@
 
     * { box-sizing: border-box; }
     
-    /* Layout Fixes for Scrollability */
     body { 
       margin: 0; background: var(--bg); color: var(--text); 
       font-family: system-ui, -apple-system, sans-serif; 
       min-height: 100vh; 
       display: flex; flex-direction: column;
-      overflow-y: auto; /* Allow body scroll */
+      overflow-y: auto; 
+      overflow-x: hidden;
     }
     
     header { 
@@ -56,7 +56,6 @@
     h1 { font-size: 16px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
     .badge { background: var(--accent); color: #000; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
     
-    /* Main Grid */
     main { 
       flex: 1; 
       display: grid; 
@@ -67,24 +66,21 @@
       margin: 0 auto;
       width: 100%;
       position: relative; 
-      padding-bottom: 220px; /* Space for logs */
+      padding-bottom: 250px; 
     }
     
     .col { display: flex; flex-direction: column; gap: 15px; min-height: 0; z-index: 2; }
     
-    /* Cards */
     .card { background: var(--panel); border: 1px solid var(--muted); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; position: relative; transition: border-color 0.3s; }
     .card:hover { border-color: var(--muted-2); }
     .card-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
     .card-title { font-weight: 600; font-size: 14px; color: var(--accent); }
     
-    /* Inputs */
     label { font-size: 12px; font-weight: 600; color: var(--text-dim); display: block; margin-bottom: 4px; }
     input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--muted); color: var(--text); padding: 8px; border-radius: 6px; font-family: inherit; font-size: 13px; outline: none; transition: 0.2s; }
     input:focus, select:focus, textarea:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 80px; font-family: monospace; line-height: 1.4; }
     
-    /* Buttons */
     .btn-row { display: flex; gap: 8px; margin-top: 4px; }
     button { flex: 1; background: var(--muted-2); border: 1px solid var(--muted); color: var(--text); padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.2s; }
     button:hover { border-color: var(--accent); color: var(--accent); }
@@ -92,7 +88,6 @@
     button.primary { background: var(--accent); color: #090b10; border: none; }
     button.primary:hover { filter: brightness(1.1); color: #000; }
     
-    /* Visual Pipes (Hidden on mobile/wrap) */
     .pipes-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; display: none; }
     @media(min-width: 1100px) { .pipes-layer { display: block; } }
     .pipe { position: absolute; height: 4px; background: var(--pipe); transition: background 0.5s, width 0.5s; border-radius: 2px; }
@@ -100,16 +95,13 @@
     #pipe1 { top: 200px; left: 33%; width: 50px; } 
     #pipe2 { top: 200px; right: 33%; width: 50px; }
 
-    /* Drop Zone */
     .drop { border: 2px dashed var(--muted); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
     .drop:hover, .drop.drag { border-color: var(--accent); background: rgba(98, 208, 255, 0.05); }
     
-    /* Progress */
     .progress-wrap { height: 4px; background: var(--muted); border-radius: 2px; overflow: hidden; margin-top: 5px; }
     .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
     .status { font-size: 11px; color: var(--text-dim); margin-top: 4px; display: flex; justify-content: space-between; }
     
-    /* Previews */
     .preview-box { background: var(--bg); border: 1px solid var(--muted); border-radius: 6px; padding: 10px; overflow: auto; max-height: 300px; font-family: monospace; font-size: 11px; white-space: pre-wrap; }
     .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 4px; max-height: 150px; overflow-y: auto; padding: 4px; }
     .thumb { aspect-ratio: 1; background: #000; border-radius: 4px; overflow: hidden; border: 1px solid var(--muted); position: relative; }
@@ -117,7 +109,6 @@
     .thumb span { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: #fff; font-size: 9px; padding: 1px 3px; }
     .thumb.skipped { opacity: 0.4; filter: grayscale(1); border: 1px solid var(--err); }
 
-    /* Logs */
     #logs { position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: var(--panel); border-top: 1px solid var(--line); z-index: 200; display: flex; flex-direction: column; transition: transform 0.3s; box-shadow: 0 -5px 20px rgba(0,0,0,0.5); }
     #logs.minimized { transform: translateY(165px); }
     .log-head { padding: 8px 20px; background: var(--muted-2); font-size: 12px; font-weight: 700; display: flex; justify-content: space-between; cursor: pointer; }
@@ -128,7 +119,6 @@
     .log-entry.WARN { color: var(--warn); }
     .log-entry.VERBOSE { color: #555; font-size: 11px; }
 
-    /* Toggle Switch */
     .switch { position: relative; width: 36px; height: 20px; background: var(--muted); border-radius: 20px; cursor: pointer; transition: 0.3s; }
     .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: 0.3s; }
     .switch.on { background: var(--accent); }
@@ -137,7 +127,6 @@
     .hidden { display: none !important; }
     .settings-group { padding: 8px; background: var(--bg); border-radius: 6px; border: 1px solid var(--line); margin-top: 8px; }
     
-    /* Highlight Placeholders */
     .ph-tag { color: var(--highlight); font-weight: bold; border: 1px solid var(--highlight); border-radius: 4px; padding: 0 4px; background: rgba(255, 159, 28, 0.1); }
   </style>
 </head>
@@ -511,6 +500,13 @@ function highlightPlaceholders(text) {
   return safe.replace(/{{IMG:[^}]+}}/g, '<span class="ph-tag">$&</span>');
 }
 
+// Helper to extract index from ID "p4_6" -> 6
+function getImgIndex(id) {
+  const parts = id.split('_');
+  if(parts.length > 1) return parseInt(parts[1], 10);
+  return 0;
+}
+
 /**
  * STEP 1: PDF INPUT & EXTRACTION
  */
@@ -640,9 +636,11 @@ async function extractImagesFromPDF(file, signal) {
         } catch(e) { continue; }
 
         if(imgObj) {
-          // Convert PDF Point to Viewport Point (Top-Left Origin)
-          const pt = viewport.convertToViewportPoint(m[4], m[5]);
+          const pdfX = m[2] + m[4]; 
+          const pdfY = m[3] + m[5]; 
+          const pt = viewport.convertToViewportPoint(pdfX, pdfY);
           const yPos = pt[1]; 
+          
           await processImage(imgObj, i, m, yPos);
         }
       }
@@ -699,8 +697,8 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
   const autoOcr = document.getElementById('autoOcrToggle').classList.contains('on');
   const tableDetect = document.getElementById('tableDetectToggle').classList.contains('on');
 
-  // Filter assets based on skip count
-  const validAssets = state.assets.slice(skipCount);
+  // Filter assets based on skip count AND sort strictly by ID index to ensure correct order
+  const validAssets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
 
   for(let i=1; i<=total; i++){
     if(signal.aborted) throw new Error("Aborted");
@@ -720,6 +718,7 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
       pageMd = await ocrCanvas(canvas);
       // Append images at bottom for OCR pages (no coord info)
       const pageImages = validAssets.filter(a => a.page === i);
+      
       if(pageImages.length) {
         pageMd += "\n\n";
         pageImages.forEach(img => pageMd += `\n${CONFIG.phPrefix}${img.id}|W:${img.width}|H:${img.height}${CONFIG.phSuffix}`);
@@ -739,16 +738,14 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
 // --- Smart Interleaving Algorithm ---
 function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   // 1. Convert Text Items to Viewport Coordinates (Top-Left Origin)
-  // PDF Text Transform: [scaleX, skewY, skewX, scaleY, x, y] (y is usually bottom-up)
   const items = textContent.items.map(it => {
-    // Transform point (x, y)
     const tx = it.transform[4];
-    const ty = it.transform[5];
+    const ty = it.transform[5] + it.height; 
     const pt = viewport.convertToViewportPoint(tx, ty);
     return {
       str: it.str,
       x: pt[0],
-      y: pt[1], // Now matches image yPos
+      y: pt[1], // Visual Top Y
       h: it.height,
       w: it.width,
       fs: Math.sqrt(Math.abs(it.transform[0]*it.transform[3])),
@@ -784,21 +781,34 @@ function mergeImagesIntoMarkdown(textContent, images, viewport, opts) {
   if(curBlock.items.length) blocks.push(curBlock);
 
   // 4. Interleave Images and Blocks
-  // Create a combined list of {type:'text', block} and {type:'image', img}
   const combined = [];
   blocks.forEach(b => combined.push({ type: 'text', y: b.yStart, data: b }));
+  
+  // Images are already sorted by ID in runLocalPDFProcessing, but we need to merge them
   images.forEach(img => combined.push({ type: 'image', y: img.yPos, data: img }));
 
-  // Sort by Y
-  combined.sort((a,b) => a.y - b.y);
+  // 5. Sort Combined List
+  // IMPROVED SORTING: Prioritize ID order for images relative to each other to prevent "4 before 3"
+  combined.sort((a,b) => {
+    // If both are images, strictly follow ID order
+    if (a.type === 'image' && b.type === 'image') {
+      return getImgIndex(a.data.id) - getImgIndex(b.data.id);
+    }
+    // Otherwise, use visual Y position
+    // If Y difference is significant, use Y
+    if (Math.abs(a.y - b.y) > 15) {
+      return a.y - b.y;
+    }
+    // If Y is close, prefer text over image usually, or left-to-right
+    return 0; 
+  });
 
-  // 5. Generate Markdown
+  // 6. Generate Markdown
   let md = "";
   combined.forEach(node => {
     if(node.type === 'image') {
       md += `\n\n${CONFIG.phPrefix}${node.data.id}|W:${node.data.width}|H:${node.data.height}${CONFIG.phSuffix}\n\n`;
     } else {
-      // Convert block items to string (simplified layout analysis)
       const blockText = simpleBlockToText(node.data.items);
       md += blockText + "\n\n";
     }
@@ -957,7 +967,8 @@ function parseDeepSeekResponse(raw) {
 }
 
 function injectPlaceholdersSimple(text, skipCount) {
-  const assets = state.assets.slice(skipCount).sort((a,b) => a.page - b.page || a.yPos - b.yPos);
+  // Sort strictly by ID index for DeepSeek mode
+  const assets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
   let output = text + "\n\n";
   let curPage = -1;
   assets.forEach(a => {
@@ -973,6 +984,12 @@ function injectPlaceholdersSimple(text, skipCount) {
 /**
  * STEP 2: GROQ STRUCTURING
  */
+function cleanJson(str) {
+  // Remove markdown code blocks to prevent syntax errors
+  if (!str) return "";
+  return str.replace(/```json/g, '').replace(/```/g, '').trim();
+}
+
 ui.btn2.addEventListener('click', async () => {
   const key = ui.groqKey.value;
   const schema = ui.schemaIn.value;
@@ -1021,7 +1038,10 @@ ui.btn2.addEventListener('click', async () => {
     if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
     
     const data = await res.json();
-    const content = data.choices[0].message.content;
+    let content = data.choices[0].message.content;
+    
+    // Clean JSON before storing
+    content = cleanJson(content);
     
     state.groqJson = content;
     ui.jsonOut.textContent = content;
@@ -1046,7 +1066,7 @@ function togglePreview() {
 }
 
 /**
- * STEP 3: ASSEMBLY
+ * STEP 3: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION & SANITIZATION)
  */
 ui.btn3.addEventListener('click', async () => {
   if(!state.groqJson) return;
@@ -1063,37 +1083,63 @@ ui.btn3.addEventListener('click', async () => {
 
     const usedImageIds = new Set();
 
-    // Recursive walker to replace placeholders
-    const processNode = async (node) => {
-      if (typeof node === 'string') {
-        if(node.startsWith(CONFIG.phPrefix) && node.endsWith(CONFIG.phSuffix)) {
-          // Extract ID from {{IMG:id|W:..|H:..}}
-          const parts = node.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|');
-          const id = parts[0];
-          
-          const asset = state.assets.find(a => a.id === id);
-          if(asset) {
-            usedImageIds.add(id);
-            const b64 = await compressImage(asset.blob, compress, quality, maxW);
-            // Return RAW Base64 string as requested
-            return b64;
-          }
-        }
-        return node;
-      } else if (Array.isArray(node)) {
-        return Promise.all(node.map(processNode));
-      } else if (typeof node === 'object' && node !== null) {
+    // Helper to check if a string is a placeholder
+    const isPlaceholder = (str) => typeof str === 'string' && str.startsWith(CONFIG.phPrefix) && str.endsWith(CONFIG.phSuffix);
+    
+    // Helper to extract ID from placeholder
+    const extractId = (ph) => ph.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|')[0];
+
+    // Recursive walker that is Context-Aware
+    const processNode = async (node, parentKey = null) => {
+      if (Array.isArray(node)) {
+        // Map and wait
+        const res = await Promise.all(node.map(item => processNode(item)));
+        return res;
+      } 
+      else if (typeof node === 'object' && node !== null) {
         const newObj = {};
-        for(let k in node) {
-          newObj[k] = await processNode(node[k]);
+        for (const [key, val] of Object.entries(node)) {
+           newObj[key] = await processNode(val, key);
         }
         return newObj;
+      }
+      else if (typeof node === 'string') {
+        if (isPlaceholder(node)) {
+            const id = extractId(node);
+            const asset = state.assets.find(a => a.id === id);
+            if (asset) {
+                usedImageIds.add(id);
+                const b64 = await compressImage(asset.blob, compress, quality, maxW);
+                
+                // Context Check using parentKey
+                // If parentKey suggests a source string, return string.
+                // Else return object.
+                const isSource = parentKey && ['src', 'url', 'href', 'data'].includes(parentKey.toLowerCase());
+                
+                if (isSource) {
+                    return b64;
+                } else {
+                    // Return full object
+                    return {
+                        type: 'image',
+                        src: b64,
+                        width: asset.width,
+                        description: '',
+                        compressionImmune: false,
+                        centering: 'default'
+                    };
+                }
+            }
+            // Asset not found? Return original string (Sanitizer will clean it up if it's in an array)
+            return node; 
+        }
+        return node;
       }
       return node;
     };
 
     setProgress(3, 30, "Processing Images...");
-    state.finalJson = await processNode(jsonObj);
+    let processedJson = await processNode(jsonObj);
 
     // FALLBACK: Inject unused images into Info.Images or Info.Bilder
     const validAssets = state.assets.slice(skipCount);
@@ -1102,32 +1148,32 @@ ui.btn3.addEventListener('click', async () => {
     if(unusedAssets.length > 0) {
       log(`Injecting ${unusedAssets.length} missing images into Info...`, "WARN");
       
-      // Find or Create Info object
-      if(!state.finalJson.Info) state.finalJson.Info = {};
+      if(!processedJson.Info) processedJson.Info = {};
       
-      // Determine target array
       let targetArray = null;
-      if(Array.isArray(state.finalJson.Info.Images)) targetArray = state.finalJson.Info.Images;
-      else if(Array.isArray(state.finalJson.Info.Bilder)) targetArray = state.finalJson.Info.Bilder;
+      if(Array.isArray(processedJson.Info.Images)) targetArray = processedJson.Info.Images;
+      else if(Array.isArray(processedJson.Info.Bilder)) targetArray = processedJson.Info.Bilder;
       else {
-        // Create if missing (default to Images)
-        state.finalJson.Info.Images = [];
-        targetArray = state.finalJson.Info.Images;
+        processedJson.Info.Images = [];
+        targetArray = processedJson.Info.Images;
       }
 
       for(const asset of unusedAssets) {
         const b64 = await compressImage(asset.blob, compress, quality, maxW);
-        // Use Full Object Structure for Fallback
         targetArray.push({
           type: 'image',
           src: b64,
-          width: dispW,
+          width: asset.width,
           description: '',
           compressionImmune: false,
           centering: 'default'
         });
       }
     }
+
+    // --- STRICT SANITIZATION ---
+    // This ensures the JSON structure matches exactly what the Offert app expects, preventing crashes.
+    state.finalJson = sanitizeFinalJson(processedJson);
     
     const jsonStr = JSON.stringify(state.finalJson, null, 2);
     ui.finalOut.textContent = jsonStr;
@@ -1142,6 +1188,53 @@ ui.btn3.addEventListener('click', async () => {
     ui.btn3.disabled = false;
   }
 });
+
+// --- Sanitizer Function ---
+function sanitizeFinalJson(data) {
+  if (!data || typeof data !== 'object') data = {};
+  if (!data.quote) data.quote = {};
+  
+  // Helper to fix items array
+  const fixItems = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    // Filter out nulls and non-objects
+    return arr.filter(i => i && typeof i === 'object').map(item => {
+      // Fix subItems: Must be an array
+      if (item.subItems && !Array.isArray(item.subItems)) {
+        // If it's a single object, wrap it. If it's something else, empty array.
+        if (typeof item.subItems === 'object') item.subItems = [item.subItems];
+        else item.subItems = [];
+      }
+      if (!item.subItems) item.subItems = [];
+      return item;
+    });
+  };
+
+  if (data.items) data.items = fixItems(data.items);
+  else data.items = [];
+
+  if (data.optionalItems) data.optionalItems = fixItems(data.optionalItems);
+  else data.optionalItems = [];
+  
+  // Fix InfoImages
+  // Sometimes LLMs output a single object instead of an array
+  if (data.infoImages && !Array.isArray(data.infoImages)) {
+     if (typeof data.infoImages === 'object') data.infoImages = [data.infoImages];
+     else data.infoImages = [];
+  }
+  // Filter out nulls and strings (failed placeholders)
+  if (data.infoImages) {
+    data.infoImages = data.infoImages.filter(i => i && typeof i === 'object');
+  } else {
+    data.infoImages = [];
+  }
+
+  // Ensure Company Objects are Objects (not strings)
+  if (data.companyA && typeof data.companyA !== 'object') data.companyA = { name: String(data.companyA) };
+  if (data.companyB && typeof data.companyB !== 'object') data.companyB = { name: String(data.companyB) };
+
+  return data;
+}
 
 // --- Image Compression ---
 function compressImage(blob, doCompress, quality, maxWidth) {
@@ -1187,7 +1280,14 @@ ui.btnDl.addEventListener('click', () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'final_output.json';
+  
+  // Dynamic Filename
+  let name = "output";
+  if(state.file && state.file.name) {
+    name = state.file.name.replace(/\.pdf$/i, "");
+  }
+  a.download = `${name} ocrd.json`;
+  
   a.click();
 });
 
