@@ -17,7 +17,7 @@
   </script>
   <!-- Tesseract.js -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
-  <!-- Pako for Compression (Added for BTK Integration) -->
+  <!-- Pako for Compression -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 
   <!-- ====== Styles ====== -->
@@ -73,10 +73,13 @@
     
     .col { display: flex; flex-direction: column; gap: 15px; min-height: 0; z-index: 2; }
     
-    .card { background: var(--panel); border: 1px solid var(--muted); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; position: relative; transition: border-color 0.3s; }
+    .card { background: var(--panel); border: 1px solid var(--muted); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; position: relative; transition: border-color 0.3s, opacity 0.3s; }
     .card:hover { border-color: var(--muted-2); }
     .card-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
     .card-title { font-weight: 600; font-size: 14px; color: var(--accent); }
+    
+    /* Disabled Card State */
+    .card.disabled { opacity: 0.4; pointer-events: none; filter: grayscale(0.8); }
     
     label { font-size: 12px; font-weight: 600; color: var(--text-dim); display: block; margin-bottom: 4px; }
     input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--muted); color: var(--text); padding: 8px; border-radius: 6px; font-family: inherit; font-size: 13px; outline: none; transition: 0.2s; }
@@ -90,12 +93,18 @@
     button.primary { background: var(--accent); color: #090b10; border: none; }
     button.primary:hover { filter: brightness(1.1); color: #000; }
     
+    /* Visual Pipes */
     .pipes-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; display: none; }
     @media(min-width: 1100px) { .pipes-layer { display: block; } }
     .pipe { position: absolute; height: 4px; background: var(--pipe); transition: background 0.5s, width 0.5s; border-radius: 2px; }
     .pipe.active { background: var(--pipe-active); box-shadow: 0 0 10px var(--pipe-active); }
-    #pipe1 { top: 200px; left: 33%; width: 50px; } 
-    #pipe2 { top: 200px; right: 33%; width: 50px; }
+    
+    /* Pipe Positioning (Approximate for 3-col layout) */
+    #pipe1 { top: 200px; left: 32%; width: 4%; } 
+    #pipe2 { top: 200px; right: 32%; width: 4%; }
+    /* Pipe 3: Bypass Translation (Step 2 -> Step 4) */
+    #pipeBypass { top: 210px; left: 33%; width: 33%; display:none; border-bottom: 2px dashed var(--pipe-active); background: transparent; height: 0; }
+    #pipeBypass.active { display: block; }
 
     .drop { border: 2px dashed var(--muted); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
     .drop:hover, .drop.drag { border-color: var(--accent); background: rgba(98, 208, 255, 0.05); }
@@ -105,11 +114,15 @@
     .status { font-size: 11px; color: var(--text-dim); margin-top: 4px; display: flex; justify-content: space-between; }
     
     .preview-box { background: var(--bg); border: 1px solid var(--muted); border-radius: 6px; padding: 10px; overflow: auto; max-height: 300px; font-family: monospace; font-size: 11px; white-space: pre-wrap; }
-    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 4px; max-height: 150px; overflow-y: auto; padding: 4px; }
-    .thumb { aspect-ratio: 1; background: #000; border-radius: 4px; overflow: hidden; border: 1px solid var(--muted); position: relative; }
+    
+    /* Gallery & Selection */
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; max-height: 200px; overflow-y: auto; padding: 4px; }
+    .thumb { aspect-ratio: 1; background: #000; border-radius: 4px; overflow: hidden; border: 2px solid var(--muted); position: relative; cursor: pointer; transition: 0.2s; opacity: 0.5; filter: grayscale(1); }
+    .thumb.selected { border-color: var(--ok); opacity: 1; filter: grayscale(0); box-shadow: 0 0 8px rgba(48, 209, 88, 0.3); }
     .thumb img { width: 100%; height: 100%; object-fit: contain; }
     .thumb span { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: #fff; font-size: 9px; padding: 1px 3px; }
-    .thumb.skipped { opacity: 0.4; filter: grayscale(1); border: 1px solid var(--err); }
+    .thumb-check { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--ok); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 10px; color: #000; font-weight: bold; }
+    .thumb.selected .thumb-check { display: flex; }
 
     #logs { position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: var(--panel); border-top: 1px solid var(--line); z-index: 200; display: flex; flex-direction: column; transition: transform 0.3s; box-shadow: 0 -5px 20px rgba(0,0,0,0.5); }
     #logs.minimized { transform: translateY(165px); }
@@ -147,6 +160,7 @@
   <div class="pipes-layer">
     <div id="pipe1" class="pipe"></div>
     <div id="pipe2" class="pipe"></div>
+    <div id="pipeBypass" class="pipe"></div>
   </div>
 
   <!-- COLUMN 1: PDF & OCR -->
@@ -169,13 +183,6 @@
           <option value="local">Local Enhanced (Smart Placement)</option>
           <option value="deepseek">DeepSeek API (Cloud)</option>
         </select>
-        
-        <div class="btn-row" style="margin-top:8px">
-          <div style="flex:1">
-            <label>Skip First N Images</label>
-            <input type="number" id="skipImages" value="1" min="0">
-          </div>
-        </div>
       </div>
 
       <!-- Local Settings -->
@@ -214,10 +221,14 @@
 
     <!-- Preview Step 1 -->
     <div class="card" style="flex:1">
-      <div class="card-head"><span class="card-title">Extracted Assets</span></div>
+      <div class="card-head">
+        <span class="card-title">Extracted Assets</span>
+        <span style="font-size:10px; color:var(--text-dim)">Click to toggle selection</span>
+      </div>
       <div id="gallery" class="gallery"></div>
       <label style="margin-top:10px">Markdown Output (Placeholders Injected)</label>
-      <div id="mdOutput" class="preview-box" style="height:200px"></div>
+      <!-- Increased Height for Objective 4 -->
+      <div id="mdOutput" class="preview-box" style="height:500px"></div>
     </div>
   </div>
 
@@ -287,7 +298,6 @@
         <span class="card-title">Groq Output (JSON)</span>
         <div style="display:flex; gap:5px">
           <button class="primary" style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('jsonOutput')">Copy</button>
-          <!-- Download LLM JSON button -->
           <button style="width:auto; padding:2px 8px; font-size:10px" id="btnDownloadGroq">Download</button>
         </div>
       </div>
@@ -298,10 +308,13 @@
   <!-- COLUMN 3: Translation & Assembly -->
   <div class="col">
     <!-- STEP 3: Translation (Optional) -->
-    <div class="card">
+    <div class="card disabled" id="cardTranslation">
       <div class="card-head">
         <span class="card-title">3. Translation (Optional)</span>
-        <span class="badge">DeepL</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; color:var(--text-dim)">Enable</span>
+            <div id="transToggle" class="switch"></div>
+        </div>
       </div>
 
       <div class="btn-row">
@@ -477,12 +490,14 @@ const CONFIG = {
 const state = {
   file: null,
   assets: [], // { id, page, width, height, blob, url, matrix, yPos }
+  selectedImageIds: new Set(), // IDs of images selected by user
   markdown: "",
   groqJson: "",
   finalJson: null,
   aborts: { step1: null },
   ocrWorker: null,
   // Translation state
+  translationEnabled: false,
   transInputRaw: "",
   transOutputRaw: "",
   transSourceName: "",
@@ -498,7 +513,6 @@ const ui = {
   btnCancel1: document.getElementById('btnCancel1'),
   gallery: document.getElementById('gallery'),
   mdOut: document.getElementById('mdOutput'),
-  skipImages: document.getElementById('skipImages'),
   
   extractMode: document.getElementById('extractMode'),
   localSet: document.getElementById('localSettings'),
@@ -511,6 +525,8 @@ const ui = {
   jsonOut: document.getElementById('jsonOutput'),
   
   // Translation UI
+  cardTranslation: document.getElementById('cardTranslation'),
+  transToggle: document.getElementById('transToggle'),
   deeplKey: document.getElementById('deeplKey'),
   deeplSource: document.getElementById('deeplSource'),
   deeplTarget: document.getElementById('deeplTarget'),
@@ -567,6 +583,26 @@ const ui = {
     }
   });
 
+  // Translation Toggle Logic
+  ui.transToggle.addEventListener('click', () => {
+    state.translationEnabled = !state.translationEnabled;
+    ui.transToggle.classList.toggle('on', state.translationEnabled);
+    ui.cardTranslation.classList.toggle('disabled', !state.translationEnabled);
+    
+    // Update Flow Visualization
+    const pipeBypass = document.getElementById('pipeBypass');
+    if(state.translationEnabled) {
+        pipeBypass.classList.remove('active');
+    } else {
+        pipeBypass.classList.add('active');
+    }
+    log(`Translation Module ${state.translationEnabled ? 'Enabled' : 'Disabled'}`, "INFO");
+  });
+  
+  // Initial State for Translation (Disabled)
+  ui.cardTranslation.classList.add('disabled');
+  document.getElementById('pipeBypass').classList.add('active');
+
   // Load Schema (Try .txt first, then .json)
   const loadSchema = async () => {
     try {
@@ -594,7 +630,9 @@ const ui = {
 
   // Toggles
   document.querySelectorAll('.switch').forEach(el => {
-    el.addEventListener('click', () => el.classList.toggle('on'));
+    if(el.id !== 'transToggle') { // transToggle handled separately
+        el.addEventListener('click', () => el.classList.toggle('on'));
+    }
   });
 
   log("System Ready. PDF.js Worker: " + pdfjsLib.GlobalWorkerOptions.workerSrc);
@@ -682,7 +720,6 @@ ui.btn1.addEventListener('click', async () => {
   state.aborts.step1 = new AbortController();
   const signal = state.aborts.step1.signal;
   const mode = ui.extractMode.value;
-  const skipCount = parseInt(ui.skipImages.value) || 0;
 
   try {
     // 1. Extract Images
@@ -690,12 +727,15 @@ ui.btn1.addEventListener('click', async () => {
     setProgress(1, 5, "Scanning Images...");
     await extractImagesFromPDF(state.file, signal);
     
-    // Mark skipped images visually
-    const thumbs = document.querySelectorAll('.thumb');
-    thumbs.forEach((t, idx) => {
-      if(idx < skipCount) t.classList.add('skipped');
+    // Default Selection Logic: Select all except the first one (index 0)
+    state.assets.forEach((asset, index) => {
+        if (index > 0) {
+            state.selectedImageIds.add(asset.id);
+        }
     });
-    log(`Found ${state.assets.length} images. Skipping first ${skipCount}.`, "VERBOSE");
+    renderGallery(); // Re-render to show selection state
+    
+    log(`Found ${state.assets.length} images. Selected ${state.selectedImageIds.size} by default.`, "VERBOSE");
 
     let rawText = "";
 
@@ -703,13 +743,13 @@ ui.btn1.addEventListener('click', async () => {
       // 2a. Local Enhanced Processing (Smart Placement)
       log("Starting Local Layout Analysis...", "INFO");
       setProgress(1, 30, "Analyzing Layout...");
-      rawText = await runLocalPDFProcessing(state.file, signal, skipCount);
+      rawText = await runLocalPDFProcessing(state.file, signal);
     } else {
       // 2b. DeepSeek OCR
       log("Starting DeepSeek OCR...", "INFO");
       setProgress(1, 30, "Negotiating OCR...");
       rawText = await runDeepSeekOCR(state.file, signal);
-      rawText = injectPlaceholdersSimple(rawText, skipCount);
+      rawText = injectPlaceholdersSimple(rawText);
     }
     
     state.markdown = rawText;
@@ -738,6 +778,7 @@ ui.btnCancel1.addEventListener('click', () => {
 
 function resetStep1() {
   state.assets = [];
+  state.selectedImageIds.clear();
   state.markdown = "";
   ui.gallery.innerHTML = "";
   ui.mdOut.innerHTML = "";
@@ -829,14 +870,39 @@ async function processImage(imgObj, pageNum, matrix, yPos) {
   
   state.assets.push({ id, page: pageNum, width: imgObj.width, height: imgObj.height, blob, url, yPos });
   
-  const div = document.createElement('div');
-  div.className = 'thumb';
-  div.innerHTML = `<img src="${url}"><span>${id}</span>`;
-  ui.gallery.appendChild(div);
+  // Don't render immediately, we render after all are done to handle selection state correctly
+}
+
+function renderGallery() {
+    ui.gallery.innerHTML = '';
+    state.assets.forEach(asset => {
+        const div = document.createElement('div');
+        div.className = 'thumb';
+        if (state.selectedImageIds.has(asset.id)) {
+            div.classList.add('selected');
+        }
+        div.innerHTML = `
+            <img src="${asset.url}">
+            <span>${asset.id}</span>
+            <div class="thumb-check">✓</div>
+        `;
+        div.onclick = () => toggleImageSelection(asset.id, div);
+        ui.gallery.appendChild(div);
+    });
+}
+
+function toggleImageSelection(id, divElement) {
+    if (state.selectedImageIds.has(id)) {
+        state.selectedImageIds.delete(id);
+        divElement.classList.remove('selected');
+    } else {
+        state.selectedImageIds.add(id);
+        divElement.classList.add('selected');
+    }
 }
 
 // --- LOCAL PDF PROCESSING (Smart Placement) ---
-async function runLocalPDFProcessing(file, signal, skipCount) {
+async function runLocalPDFProcessing(file, signal) {
   const buf = await file.arrayBuffer();
   const doc = await pdfjsLib.getDocument(buf).promise;
   const total = doc.numPages;
@@ -845,8 +911,8 @@ async function runLocalPDFProcessing(file, signal, skipCount) {
   const autoOcr = document.getElementById('autoOcrToggle').classList.contains('on');
   const tableDetect = document.getElementById('tableDetectToggle').classList.contains('on');
 
-  // Filter assets based on skip count AND sort strictly by ID index to ensure correct order
-  const validAssets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+  // Filter assets based on SELECTION
+  const validAssets = state.assets.filter(a => state.selectedImageIds.has(a.id)).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
 
   for(let i=1; i<=total; i++){
     if(signal.aborted) throw new Error("Aborted");
@@ -1110,9 +1176,10 @@ function parseDeepSeekResponse(raw) {
   } catch(e) { return raw.length > 50 ? raw : null; }
 }
 
-function injectPlaceholdersSimple(text, skipCount) {
+function injectPlaceholdersSimple(text) {
   // Sort strictly by ID index for DeepSeek mode
-  const assets = state.assets.slice(skipCount).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
+  // Filter by selection
+  const assets = state.assets.filter(a => state.selectedImageIds.has(a.id)).sort((a,b) => getImgIndex(a.id) - getImgIndex(b.id));
   let output = text + "\n\n";
   let curPage = -1;
   assets.forEach(a => {
@@ -1189,14 +1256,7 @@ ui.btn2.addEventListener('click', async () => {
     
     // Keep the raw JSON string as returned by the LLM
     state.groqJson = content;
-    // Default JSON for assembly is the Groq output (can be overridden by translation)
-    state.currentJsonForAssembly = content;
-    // Also pre-populate translation input for convenience
-    state.transInputRaw = content;
-    state.transSourceName = state.file && state.file.name
-      ? state.file.name.replace(/\.pdf$/i, "") + " structured"
-      : "structured";
-
+    
     // Pretty-print JSON for display
     ui.jsonOut.textContent = prettyPrintJson(content);
     if (ui.transInputPreview) {
@@ -1429,7 +1489,6 @@ async function runTranslation() {
     if (!uniqueSegments.length) {
       const outStr = JSON.stringify(obj, null, 2);
       state.transOutputRaw = outStr;
-      state.currentJsonForAssembly = outStr;
       ui.transOutputPreview.textContent = outStr;
       setTransProgress(100, "Nothing to translate");
       log("No translatable segments found; JSON left unchanged.", "WARN");
@@ -1463,7 +1522,6 @@ async function runTranslation() {
     const outStr = JSON.stringify(translatedObj, null, 2);
 
     state.transOutputRaw = outStr;
-    state.currentJsonForAssembly = outStr;
 
     ui.transOutputPreview.textContent = outStr;
     setTransProgress(100, "Translation complete");
@@ -1482,10 +1540,20 @@ async function runTranslation() {
  * STEP 4: ASSEMBLY (IMPROVED CONTEXT-AWARE INJECTION & SANITIZATION)
  */
 ui.btn3.addEventListener('click', async () => {
-  const src = state.currentJsonForAssembly || state.groqJson;
-  if (!src) {
-    alert("No structured JSON available. Run Step 2 (Groq) or load/translate a JSON first.");
-    return;
+  // Determine Source: Translation Output OR Groq Output
+  let src = "";
+  if (state.translationEnabled) {
+      src = state.transOutputRaw;
+      if (!src) {
+          alert("Translation is enabled but no output generated. Run Step 3 first.");
+          return;
+      }
+  } else {
+      src = state.groqJson;
+      if (!src) {
+          alert("No structured JSON available. Run Step 2 (Groq) first.");
+          return;
+      }
   }
 
   ui.btn3.disabled = true;
@@ -1497,7 +1565,6 @@ ui.btn3.addEventListener('click', async () => {
     const quality = parseFloat(document.getElementById('imgQuality').value);
     const maxW = parseInt(document.getElementById('imgMaxWidth').value);
     const dispW = parseInt(document.getElementById('jsonDispWidth').value);
-    const skipCount = parseInt(ui.skipImages.value) || 0;
 
     const usedImageIds = new Set();
 
@@ -1514,6 +1581,25 @@ ui.btn3.addEventListener('click', async () => {
         return res;
       } 
       else if (typeof node === 'object' && node !== null) {
+        // OBJECTIVE 2: Check if this is a "Text Block" that is actually an "Image Placeholder"
+        if (node.type === 'text' && isPlaceholder(node.content)) {
+            const id = extractId(node.content);
+            const asset = state.assets.find(a => a.id === id);
+            if (asset) {
+                usedImageIds.add(id);
+                const b64 = await compressImage(asset.blob, true, quality, maxW);
+                // Convert to Image Block Structure
+                return {
+                    type: 'image',
+                    src: b64,
+                    width: asset.width, // Use original width or default? Schema says default 400, but we have asset width
+                    description: '',
+                    compressionImmune: false,
+                    centering: node.centering || 'default'
+                };
+            }
+        }
+
         const newObj = {};
         for (const [key, val] of Object.entries(node)) {
            newObj[key] = await processNode(val, key);
@@ -1557,7 +1643,8 @@ ui.btn3.addEventListener('click', async () => {
     let processedJson = await processNode(jsonObj);
 
     // FALLBACK: Inject unused images into Info.Images or Info.Bilder
-    const validAssets = state.assets.slice(skipCount);
+    // Only consider images that were SELECTED in Step 1
+    const validAssets = state.assets.filter(a => state.selectedImageIds.has(a.id));
     const unusedAssets = validAssets.filter(a => !usedImageIds.has(a.id));
     
     if(unusedAssets.length > 0) {
