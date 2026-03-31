@@ -287,12 +287,30 @@
           </div>
         </div>
         
-        <div class="btn-row">
-             <div style="flex:1">
-              <label>CORS Proxy</label>
-              <div style="display:flex; align-items:center; height:36px;">
-                <div id="corsToggle" class="switch on" title="Use corsproxy.io"></div>
-                <span style="font-size:11px; margin-left:8px">Enabled</span>
+        <!-- Advanced Proxy Settings (Global for Step 2 & 3) -->
+        <div class="settings-group">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px">
+              <label style="margin:0">Global CORS Proxy</label>
+              <div id="globalCorsToggle" class="switch on" title="Use Proxy for API calls"></div>
+            </div>
+            
+            <div id="proxySettings" style="display:flex; flex-direction:column; gap:8px;">
+              <select id="proxyProvider">
+                 <option value="lovable" selected>Lovable/Supabase (Config Mode)</option>
+                 <option value="thingproxy">ThingProxy (Public)</option>
+                 <option value="custom">Custom URL (Standard)</option>
+              </select>
+
+              <div id="authHeaderGroup" style="border-top:1px solid var(--line); padding-top:8px;">
+                 <label style="color:var(--accent);">Proxy Auth Header (Lovable)</label>
+                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                    <input type="text" id="proxyHeaderKey" placeholder="Key" value="x-proxy-key">
+                    <input type="text" id="proxyHeaderVal" placeholder="Value" value="chikibriki">
+                 </div>
+              </div>
+              <div id="customProxyGroup" class="hidden">
+                 <label>Custom Proxy URL</label>
+                 <input type="text" id="proxyUrl" placeholder="https://...">
               </div>
             </div>
         </div>
@@ -435,34 +453,6 @@
             <button id="loadDefaultTransPrompt" style="width:30%; font-size:10px; padding:2px;">Load Default</button>
           </div>
           <textarea id="transPromptInput" style="height:80px; margin-top:5px;" placeholder="Translate the following JSON values..."></textarea>
-        </div>
-
-        <!-- Advanced Proxy Settings -->
-        <div class="settings-group">
-            <div style="display:flex; justify-content:space-between; margin-bottom:5px">
-              <label style="margin:0">CORS Proxy</label>
-              <div id="transCorsToggle" class="switch on" title="Use Proxy"></div>
-            </div>
-            
-            <div id="proxySettings" style="display:flex; flex-direction:column; gap:8px;">
-              <select id="proxyProvider">
-                 <option value="lovable" selected>Lovable/Supabase (Config Mode)</option>
-                 <option value="thingproxy">ThingProxy (Public)</option>
-                 <option value="custom">Custom URL (Standard)</option>
-              </select>
-
-              <div id="authHeaderGroup" style="border-top:1px solid var(--line); padding-top:8px;">
-                 <label style="color:var(--accent);">Proxy Auth Header (Lovable)</label>
-                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                    <input type="text" id="proxyHeaderKey" placeholder="Key" value="x-proxy-key">
-                    <input type="text" id="proxyHeaderVal" placeholder="Value" value="chikibriki">
-                 </div>
-              </div>
-              <div id="customProxyGroup" class="hidden">
-                 <label>Custom Proxy URL</label>
-                 <input type="text" id="proxyUrl" placeholder="https://...">
-              </div>
-            </div>
         </div>
 
         <!-- Overseer Verification Module -->
@@ -689,8 +679,8 @@ const ui = {
   deeplTarget: document.getElementById('deeplTarget'),
   targetKeysInput: document.getElementById('targetKeysInput'),
   
-  // Proxy UI
-  transCorsToggle: document.getElementById('transCorsToggle'),
+  // Global Proxy UI
+  globalCorsToggle: document.getElementById('globalCorsToggle'),
   proxyProvider: document.getElementById('proxyProvider'),
   authHeaderGroup: document.getElementById('authHeaderGroup'),
   customProxyGroup: document.getElementById('customProxyGroup'),
@@ -801,9 +791,9 @@ const ui = {
   });
   ui.cardTranslation.classList.add('disabled');
 
-  ui.transCorsToggle.addEventListener('click', () => {
-      ui.transCorsToggle.classList.toggle('on');
-      ui.proxySettings.classList.toggle('hidden', !ui.transCorsToggle.classList.contains('on'));
+  ui.globalCorsToggle.addEventListener('click', () => {
+      ui.globalCorsToggle.classList.toggle('on');
+      ui.proxySettings.classList.toggle('hidden', !ui.globalCorsToggle.classList.contains('on'));
   });
 
   ui.verifyToggle.addEventListener('click', () => {
@@ -850,7 +840,7 @@ const ui = {
 
   // General Toggles
   document.querySelectorAll('.switch').forEach(el => {
-    if(el.id !== 'transToggle' && el.id !== 'transCorsToggle' && el.id !== 'verifyToggle') { 
+    if(el.id !== 'transToggle' && el.id !== 'globalCorsToggle' && el.id !== 'verifyToggle') { 
         el.addEventListener('click', () => el.classList.toggle('on'));
     }
   });
@@ -1516,7 +1506,8 @@ ui.btn2.addEventListener('click', async () => {
   
   const model = document.getElementById('groqModel').value;
   const reasoningEffort = document.getElementById('reasoningEffort').value;
-  const useProxy = document.getElementById('corsToggle').classList.contains('on');
+  const useProxy = document.getElementById('globalCorsToggle').classList.contains('on');
+  const proxyProvider = document.getElementById('proxyProvider').value;
   const prompt = document.getElementById('groqPrompt').value;
 
   const messages = [
@@ -1532,9 +1523,7 @@ ui.btn2.addEventListener('click', async () => {
     log("Sending to Groq...", "INFO");
     setProgress(2, 40, "Waiting for LLM...");
     
-    let url = "https://api.groq.com/openai/v1/chat/completions";
-    if(useProxy) url = "https://corsproxy.io/?" + encodeURIComponent(url);
-
+    let fetchUrl = "https://api.groq.com/openai/v1/chat/completions";
     const payload = {
         model: model,
         messages: messages,
@@ -1548,16 +1537,51 @@ ui.btn2.addEventListener('click', async () => {
         messages[0].content += ` Reasoning Effort: ${reasoningEffort.toUpperCase()}.`;
     }
 
-    const res = await fetch(url, {
+    let fetchOptions = {
       method: "POST",
       headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    });
+    };
 
-    if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
+    // Advanced Proxy Logic to fix 413 Payload Too Large
+    if (useProxy) {
+        if (proxyProvider === 'lovable') {
+            fetchUrl = CONFIG.proxies.lovable;
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
+                body: JSON.stringify({
+                    url: "https://api.groq.com/openai/v1/chat/completions",
+                    method: 'POST',
+                    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                    body: payload
+                })
+            };
+        } else {
+            let proxyBase = (proxyProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[proxyProvider];
+            fetchUrl = proxyBase + "https://api.groq.com/openai/v1/chat/completions";
+            if (proxyProvider === 'custom' && ui.proxyHeaderKey.value) {
+                fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+            }
+        }
+    }
+
+    const res = await fetch(fetchUrl, fetchOptions);
+
+    if(!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Groq API Error: ${res.status} - ${errText.substring(0, 150)}`);
+    }
     
     const data = await res.json();
-    let content = data.choices[0].message.content;
+    
+    // Handle Lovable proxy response wrapping
+    let content;
+    if (useProxy && proxyProvider === 'lovable' && data.body) {
+        content = data.body.choices[0].message.content;
+    } else {
+        content = data.choices[0].message.content;
+    }
     
     content = cleanJson(content);
     
@@ -1931,7 +1955,7 @@ async function runTranslation() {
       setTransProgress(30, "Requesting DeepL translation...");
       const srcLang = ui.deeplSource.value || '';
       const tgtLang = ui.deeplTarget.value || 'SV';
-      const useProxy = ui.transCorsToggle.classList.contains('on');
+      const useProxy = ui.globalCorsToggle.classList.contains('on');
 
       const translatedSegments = await translateSegmentsWithDeepL(key, uniqueSegments, srcLang, tgtLang, useProxy);
 
@@ -1963,7 +1987,7 @@ async function runTranslation() {
       const prompt = ui.transPromptInput.value;
       const model = ui.transGroqModel.value;
       const reasoningEffort = ui.transReasoningEffort.value;
-      const useProxy = ui.transCorsToggle.classList.contains('on'); 
+      const useProxy = ui.globalCorsToggle.classList.contains('on'); 
 
       const translatedJsonStr = await translateWithGroq(raw, prompt, model, reasoningEffort, key, useProxy);
       
