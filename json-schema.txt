@@ -173,3 +173,149 @@
   - Set all computed target prices (**targetPrice**, **subItemTargetPrice**) to 0.
   - Omit **itemNumber** / **subItemNumber** and let the app renumber automatically.
   - Omit optional fields; the app will backfill defaults as described above.
+
+EXEMPEL: -----------------------
+
+{
+  "quote": {
+    "quoteNumber": "7721737-26",
+    "date": "2026-03-31",
+    "reference": "MARINI MR 9 PN",
+    "currencyOrigin": "EUR",
+    "currencyTarget": "SEK",
+    "currencyMultiplicator": 11.2,
+    "supplier": "MARINI",
+    "marginPercentage": 0,
+    "useMultipleCurrencies": false,
+    "usdToSekRate": 10.5,
+    "eurToSekRate": 11.5,
+    "showSignature": false,
+    "showTillSection": true,
+    "removeTotal": false,
+    "defaultLogoWidth": 200,
+    "useCustomCurrency": false,
+    "customCurrency": "EUR",
+    "centerImagesByDefault": true,
+    "marginCalculationMode": "markup",
+    "labels": {},
+    "visibility": {
+      "optional": true,
+      "info": true,
+      "terms": true
+    },
+    "separators": {},
+    "multiplyCustomCurrency": false,
+    "customRates": {
+      "usd": 1,
+      "eur": 1,
+      "sek": 1
+    },
+    "moveInfoSectionUp": false,
+    "": "Operativa krav:- Luftbehov på minst 10.000 lpm @ 6 bar tryck- Smörjolja (att fylla på i dimsmörjaren) typ ALMO 525 eller liknande"
+  },
+  "companyA": {
+    "line1": "Orgnr: 555555-5555"
+  },
+  "companyB": {
+    "line1": "Betongakuten AB",
+    "line2": "Sidensvansvägen 2",
+    "line3": "218 32 Bunkeflostrand",
+    "line4": "Orgnr: 556931-7497\n\nMob: +46700379411"
+  },
+  "items": [
+    {
+      "itemNumber": "1.1",
+      "name": "Pneumatiskt borraggregat MR - 9 PN",
+      "itemDescription": "<div>Bärbar basenhet i stål, komplett med mastfäste, bottenplatta med 4 nivelleringsskruvar, 2 gummihjul och en krok för kontrollpanelen.</div><div>\n</div><div>Pneumatisk borrmast mod. MCDP, med slaglängd 700 mm för stänger med längd 500 mm. Dragkraft 8.50 kN – total mastlängd cirka 1850 mm.</div><div>\n</div><div>Mastförlängning 500 mm (total slaglängd 12000 mm) för 1000 mm stänger – total mastlängd cirka 2350 mm.</div><div>\n</div><div>Flyttbar handtagskonsol ansluten till masten.</div><div>\n</div><div>Horisontell kontrollpanel med 2 fördelare, centraliserat smörjsystem, luft-/vattenspolning och 1\" 1/2 nödventil.</div><div>\n</div><div>Sats med slangar för pneumatisk topphammare MA 1000.</div><div>\n</div><div>Tillägg för lufttrycksreduktor (60 bar) för högtryckskompressor (monteras på kontrollpanelen).</div><div>\n</div>Stångstyrning med utbytbar bussningsbas 76 mm (T40-stänger).<span class=\"description-remove-icon\">✖</span><span class=\"description-remove-icon\">✖</span><span class=\"description-remove-icon screen-only\">✖</span>",
+      "quantity": 1,
+      "originalPrice": 19490,
+      "targetPrice": 218288,
+      "currencyOrigin": "EUR",
+      "currencyTarget": "SEK",
+      "subItems": [],
+      "isPriceBakedIn": false,
+      "isHiddenFromPrint": false,
+      "vendorNotes": "",
+      "type": "item",
+      "preBakeTargetPrice": 218288,
+      "marginPercentage": 0
+    },
+    {
+      "itemNumber": "2.1",
+      "name": "Pneumatisk topphammare MARINI MA 1000S 3R",
+      "itemDescription": "Slagenergi 80 kW / 1800 Nm (28000 bpm).\nVäxellåda med enkel pneumatisk motor.\n3R-motor med 3200 Nm vridmoment och 1600 rpm.\nIntegrerad spolningssvivel för luft/vatten/bruk.\nAdapter för T40 hålstänger (LH-box).<span class=\"description-remove-icon\">✖</span>",
+      "quantity": 1,
+      "originalPrice": 17050,
+      "targetPrice": 190960,
+      "currencyOrigin": "EUR",
+      "currencyTarget": "SEK",
+      "subItems": [],
+      "isPriceBakedIn": false,
+      "isHiddenFromPrint": false,
+      "vendorNotes": "",
+      "type": "item",
+      "preBakeTargetPrice": 190960,
+      "marginPercentage": 0
+    }
+  ],
+  "optionalItems": [
+    {
+      "type": "item",
+      "name": "Hyra per arbetsdag",
+      "itemDescription": "<div>Hyra per arbetsdag. Om hyrestagaren köper utrustningen dras alla kostnader för tidigare debiterad hyra av med en reduktion av -20%.&nbsp;</div><div>\n</div><div>Bokning:&nbsp;enligt först till kvarn - principen.</div>",
+      "quantity": 1,
+      "originalPrice": 9000,
+      "targetPrice": 9000,
+      "marginPercentage": 0,
+      "subItems": [],
+      "isHiddenFromPrint": false,
+      "vendorNotes": "",
+      "itemNumber": "A1.1",
+      "isPriceBakedIn": false,
+      "currencyOrigin": "SEK"
+    }
+  ],
+  "terms": [
+    "<strong>Offertens giltighet:</strong> 30 dagar från offertdatum.",
+    "<strong>Betalningsvillkor:</strong> 50% vid beställning, 50% vid leverans (senast inom 5 arbetsdagar).",
+    "<strong>Valutaklausul:</strong>&nbsp;Vi förbehåller oss rätten att omförhandla offerten om köpkursen för EUR/SEK överstiger 11.20 fram till det datum då offerten godtas.",
+    "<strong>Garantivillkor:</strong> Som angivet i den bifogade PRODUKTGARANTI ver. 0.03.",
+    "<strong>Leveransvillkor:</strong>&nbsp;Finns 1 st i lagret i Malmö (först till kvarn principen gäller). Annars fritt fabrik enligt avtal. Cirka 20 arbetsdagar från beställning.",
+    "<strong>Moms och frakt:</strong> Tillkommer."
+  ],
+  "additionalInfo": [
+    "Priserna är ex-factory (EXW Villadossola) – förpackning och transport ingår inte.",
+    "Maskinens ungefärliga vikt (beroende på tillbehör): 280–300 kg.",
+    "Operativa krav:\n- Luftbehov på minst 10.000 lpm @ 6 bar tryck\n- Smörjolja (att fylla på i smörjapparaten), typ ALMO 525 eller liknande.",
+    "Installationskostnad och utbildning:\n- Teknikerkostnad per dag (från avgångsdatum till återkomst): 850,00 Euro\n- Boendekostnader (hotell, interntransport etc.): På kundens bekostnad\n- Flygbiljett: På kundens bekostnad.",
+    "Betalning:\n100 % före leverans"
+  ],
+  "infoImages": [
+    {
+      "type": "text",
+      "content": "<b>Operativa krav:</b><br>- Luftbehov på minst 10.000 lpm @ 6 bar tryck<br>- Smörjolja (att fylla på i dimsmörjaren) typ ALMO 525 eller liknande",
+      "centering": "left"
+    },
+    {
+      "type": "image",
+      "width": 313,
+      "description": "",
+      "compressionImmune": false,
+      "centering": "left"
+    },
+    {
+      "type": "image",
+      "width": 290,
+      "description": "",
+      "compressionImmune": false,
+      "centering": "left"
+    }
+  ],
+  "signature": {
+    "date": "",
+    "lessorLine": "",
+    "lesseeLine": "",
+    "lessorText": "Uthyrare",
+    "lesseeText": "Hyrestagare"
+  }
+}
