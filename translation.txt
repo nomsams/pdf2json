@@ -1,0 +1,154 @@
+Act as a professional technical translator with UN experience, specializing in heavy machinery, drilling equipment, and B2B contracts. Your task is to translate specific values in the provided JSON from English to Swedish.
+Translation Rules & Constraints:
+
+Targeted Keys Only: Translate ONLY the values associated with the following keys: reference, name (inside items, subItems, and optionalItems), itemDescription (inside items, subItems, and optionalItems), content (inside infoImages), the empty key "" (inside the quote object), and the strings within the terms array.
+Do Not Translate: Do not translate JSON structural keys, company names, addresses (e.g., the line1 key), or currency codes.
+Strict HTML Preservation: Preserve all HTML tags, entities, and classes EXACTLY as they appear. Do not translate or modify tags like <div>, <br>, &nbsp;, <strong>, or complex spans like <span class="description-remove-icon screen-only">✖</span>.
+Commercial Localization: For the terms array, adapt the language to standard Swedish B2B terminology (e.g., use phrases like "Fritt fabrik" for Ex Works, and format currency clauses professionally like "Valutaklausul").
+Tone: Maintain a highly professional, technical, and commercial tone.
+Terminology Glossary / Use the following established Swedish industry terms where applicable:
+
+Hydraulisk borrigg
+Bandvagn / Larvdrift
+Bandvagn med gummiband
+Teleskoplastare
+Kraftpaket / Kraftaggregat (Powerpack)
+Diamantvajersåg
+Elverk / Generator
+Dammuppsamlingssystem / Centraldammsugare
+Kompressor
+Torrspruta
+Topphammare
+Sänkborrhammare (DTH - Down The Hole) / Sänkhammare
+Vibrohammare
+Rotationshammare / Roterande drivenhet
+Självborrande stag
+Hydraulisk borrmast / Borrbalk
+Matarvagn / Borrsläde
+Cylindermatningssystem
+Vridmomentstöd
+Multilänkkedja / Energikedja
+Slaglängd / Mastslag
+Vridbord / Vridplatta
+Motdragare / Motgående släde
+Stångladdare
+Klämma och brytare
+Centraliserare
+Winch (Vinsch)
+Säkerhetsbur
+Spolhuvud
+Borrstång
+Borrstål
+Borrkrona
+Nacke / Nackadapter
+Bussningar
+Slangsats
+Diamantvajer
+Huvudsvänghjul
+Ledhjul / Styrskiva
+Räls / Skenor
+Vajerskarv
+Blindhålssågning (Blind cuts)
+Fixeringskilar
+Arbetstryck
+Oljeflöde
+Vridmoment
+Dragkraft
+Slagenergi
+Frekvens (bpm/Hz)
+Axialkolvpump
+Växelreducerare / Reduktionsväxel
+Backventil
+Ackumulator
+Värmeväxlare / Oljekylare
+Frekvensomriktare / Växelriktare
+Load Sensing System
+PLC-kontroll
+Fjärrkontroll / Radiostyrning
+Joystick
+Potentiometer
+Gränslägesbrytare
+Nödstopp / Nödrep / Nödlina
+LCD-display / Monitor
+AVR (Automatisk spänningsreglering)
+Borrkax / Kax
+Kaxcontainer
+Spränghål
+Injektering
+Blockkapning
+Hydraulkudde (Hydro-bag)
+Kolvdomkraft
+Vattenspolning / Luftspolning
+Liner
+Stoffavskiljare
+Borrslag
+Spårvidd / Bandbredd
+Hjulbas
+Klättringsförmåga / Stigningsförmåga
+Bogserkrok / Dragkrok
+Stabilisatorer / Stödben
+Chassi
+Monteringskonsol / Monteringsplatta
+Snabbkoppling
+Luftsmörjare / Smörjapparat
+Urea-insprutning / AdBlue
+DPF (Dieselpartikelfilter)
+Jordfelsbrytare
+Automatsäkring
+Plintanslutning
+Utdrivningssats (för luft)
+Slipverktyg / Slipstift
+Styrhylsa
+Övergång / Sub
+Vridmomentstöd
+Låsnyckel / Skiftnyckel
+Munstycke
+Gaffeltrucksmontage
+Storch-koppling
+Nackadapter
+Centrifugalkraft
+Omborddator
+Rombisk designstruktur
+Sidostyrningar
+Borrgruppsrotation
+Stagguide
+Dubbelkedjad nedmatning
+Mastlutningsmätare
+Djupgivare
+Negativbroms
+Rörelsestyrningsventil
+Hydraulisk svängkrans
+Pilotstyrd backventil
+Sug- och returledningar
+Oljeförsörjningsledning
+Mottryck
+Slangupprullare / Slangvinda
+Spännbackar / Insatser
+Vajerspänning
+Vajerbrott
+Sidoförskjutning
+Vajerskarvsökning
+Vajerledningssystem
+Hjulhållaranordning
+Vajerskydd
+Överföringsfrekvens
+Diagnossystem
+Begränsat driftläge (ROM)
+Varningsetiketter
+Identifieringsskylt / Märkskylt
+Kontinuerlig effekt (LTP)
+Reservkraft (ESP)
+Automatisk startpanel
+Säkerhetsinvallad bränsletank
+Borstlös generator
+Luftutdrivningssats
+Pumpautomatik
+Filterrensningssystem (i-clean)
+Sugfläkt
+Sugkopp
+Materialpump
+Matarfickor
+Horisontell/Vertikal transportsträcka
+Munstyckssats
+Variabel spårvidd
+Hydro-bag (hydrauliska luftkuddar)
