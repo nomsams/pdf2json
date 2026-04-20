@@ -297,6 +297,7 @@
             <div id="proxySettings" style="display:flex; flex-direction:column; gap:8px;">
               <select id="proxyProvider">
                  <option value="lovable" selected>Lovable/Supabase (Config Mode)</option>
+                 <option value="corsproxy">CorsProxy.io (Public)</option>
                  <option value="thingproxy">ThingProxy (Public)</option>
                  <option value="custom">Custom URL (Standard)</option>
               </select>
@@ -345,11 +346,11 @@
     <!-- Preview Step 2 -->
     <div class="card" style="flex:1">
       <div class="card-head">
-        <span class="card-title">Input Preview (To Groq)</span>
+        <span class="card-title">Live Input Preview (To Groq)</span>
         <button style="width:auto; padding:2px 8px; font-size:10px" onclick="togglePreview()">Toggle Output</button>
       </div>
       <div class="card-body" style="flex:1; overflow:hidden;">
-        <div id="groqInputPreview" class="preview-box" style="display:block; border-bottom:1px solid var(--line); margin-bottom:10px; height:150px;"></div>
+        <div id="groqInputPreview" class="preview-box" style="display:block; border-bottom:1px solid var(--line); margin-bottom:10px; height:200px;"></div>
         
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
             <span class="card-title" style="font-size:12px;">Groq Output (Editable JSON)</span>
@@ -610,7 +611,8 @@ const CONFIG = {
   llmBatchSize: 50,
   proxies: {
       lovable: "https://onbkfqayveownervyktu.supabase.co/functions/v1/cors-proxy",
-      thingproxy: "https://thingproxy.freeboard.io/fetch/"
+      thingproxy: "https://thingproxy.freeboard.io/fetch/",
+      corsproxy: "https://corsproxy.io/?"
   }
 };
 
@@ -818,12 +820,16 @@ const ui = {
       if(res.ok) { ui.schemaIn.value = await res.text(); log("Loaded schema from file.", "SUCCESS"); } 
       else log("No default schema found.", "WARN");
     } catch(e) { log("Schema load error: " + e.message, "ERR"); }
+    updateLiveGroqPreview();
   };
   await loadSchema();
   document.getElementById('loadDefaultSchema').addEventListener('click', loadSchema);
   document.getElementById('schemaFile').addEventListener('change', async (e) => {
     const f = e.target.files[0];
-    if(f) ui.schemaIn.value = await f.text();
+    if(f) {
+        ui.schemaIn.value = await f.text();
+        updateLiveGroqPreview();
+    }
   });
 
   // Load Translation Prompt
@@ -857,6 +863,10 @@ const ui = {
   ui.jsonOut.addEventListener('input', (e) => { state.groqJson = e.target.value; });
   ui.transOutputPreview.addEventListener('input', (e) => { state.transOutputRaw = e.target.value; });
 
+  // Live Preview Listeners
+  ui.schemaIn.addEventListener('input', updateLiveGroqPreview);
+  document.getElementById('groqPrompt').addEventListener('input', updateLiveGroqPreview);
+
   // Revert Buttons
   ui.btnRevertGroq.addEventListener('click', () => {
     if(state.originalGroqJson) {
@@ -875,6 +885,7 @@ const ui = {
 
   window.addEventListener('resize', drawFlow);
   setTimeout(drawFlow, 500);
+  updateLiveGroqPreview();
   log("System Ready. PDF.js Worker: " + pdfjsLib.GlobalWorkerOptions.workerSrc);
 })();
 
@@ -925,6 +936,26 @@ function highlightPlaceholders(text) {
   if(!text) return '';
   let safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return safe.replace(/{{IMG:[^}]+}}/g, '<span class="ph-tag">$&</span>');
+}
+
+function updateLiveGroqPreview() {
+    const schema = ui.schemaIn.value || "No schema provided.";
+    const markdown = state.markdown || "No text extracted yet.";
+    const prompt = document.getElementById('groqPrompt').value || "";
+
+    const previewText = `[SYSTEM]
+You are a data extraction assistant. Output valid JSON only.
+
+[USER - JSON Schema]
+${schema}
+
+[USER - Text with Image Placeholders]
+${markdown}
+
+[USER - Prompt Instruction]
+${prompt}`;
+
+    ui.groqInputPreview.innerHTML = highlightPlaceholders(previewText);
 }
 
 function getImgIndex(id) {
@@ -1242,6 +1273,7 @@ function updateMarkdownOutput() {
 
     state.markdown = md.trim();
     ui.mdOut.innerHTML = highlightPlaceholders(state.markdown);
+    updateLiveGroqPreview();
 }
 
 async function runLocalPDFProcessing(file, signal) {
@@ -1521,13 +1553,10 @@ ui.btn2.addEventListener('click', async () => {
     { role: "user", content: prompt }
   ];
 
-  ui.groqInputPreview.innerHTML = highlightPlaceholders(messages[2].content);
-
   try {
     log("Sending to Groq...", "INFO");
     setProgress(2, 40, "Waiting for LLM...");
     
-    let fetchUrl = "https://api.groq.com/openai/v1/chat/completions";
     const payload = {
         model: model,
         messages: messages,
@@ -1541,50 +1570,61 @@ ui.btn2.addEventListener('click', async () => {
         messages[0].content += ` Reasoning Effort: ${reasoningEffort.toUpperCase()}.`;
     }
 
-    let fetchOptions = {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    };
+    // Robust fetch wrapper with fallback
+    const attemptFetch = async (isProxy, pProvider) => {
+        let fetchUrl = "https://api.groq.com/openai/v1/chat/completions";
+        let fetchOptions = {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        };
 
-    // Advanced Proxy Logic to fix 413 Payload Too Large
-    if (useProxy) {
-        if (proxyProvider === 'lovable') {
-            fetchUrl = CONFIG.proxies.lovable;
-            fetchOptions = {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
-                body: JSON.stringify({
-                    url: "https://api.groq.com/openai/v1/chat/completions",
+        if (isProxy) {
+            if (pProvider === 'lovable') {
+                fetchUrl = CONFIG.proxies.lovable;
+                fetchOptions = {
                     method: 'POST',
-                    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-                    body: payload
-                })
-            };
-        } else {
-            let proxyBase = (proxyProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[proxyProvider];
-            fetchUrl = proxyBase + "https://api.groq.com/openai/v1/chat/completions";
-            if (proxyProvider === 'custom' && ui.proxyHeaderKey.value) {
-                fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+                    headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
+                    body: JSON.stringify({
+                        url: "https://api.groq.com/openai/v1/chat/completions",
+                        method: 'POST',
+                        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                        body: payload
+                    })
+                };
+            } else if (pProvider === 'corsproxy') {
+                fetchUrl = CONFIG.proxies.corsproxy + encodeURIComponent("https://api.groq.com/openai/v1/chat/completions");
+            } else {
+                let proxyBase = (pProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[pProvider];
+                fetchUrl = proxyBase + "https://api.groq.com/openai/v1/chat/completions";
+                if (pProvider === 'custom' && ui.proxyHeaderKey.value) {
+                    fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+                }
             }
         }
-    }
 
-    const res = await fetch(fetchUrl, fetchOptions);
+        const res = await fetch(fetchUrl, fetchOptions);
+        if(!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Groq API Error: ${res.status} - ${errText.substring(0, 150)}`);
+        }
+        const data = await res.json();
+        return (pProvider === 'lovable' && isProxy && data.body) ? data.body.choices[0].message.content : data.choices[0].message.content;
+    };
 
-    if(!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Groq API Error: ${res.status} - ${errText.substring(0, 150)}`);
-    }
-    
-    const data = await res.json();
-    
-    // Handle Lovable proxy response wrapping
     let content;
-    if (useProxy && proxyProvider === 'lovable' && data.body) {
-        content = data.body.choices[0].message.content;
-    } else {
-        content = data.choices[0].message.content;
+    try {
+        content = await attemptFetch(useProxy, proxyProvider);
+    } catch (err) {
+        log(`Primary Groq Structuring failed: ${err.message}. Retrying with fallback CORS...`, "WARN");
+        try {
+            if (useProxy && proxyProvider !== 'corsproxy') content = await attemptFetch(true, 'corsproxy');
+            else if (!useProxy) content = await attemptFetch(true, 'corsproxy');
+            else content = await attemptFetch(false, null);
+            log(`Fallback successful!`, "SUCCESS");
+        } catch (fallbackErr) {
+            throw new Error(`Groq API Error (All attempts failed). Last error: ${fallbackErr.message}`);
+        }
     }
     
     content = cleanJson(content);
@@ -1742,6 +1782,8 @@ async function translateSegmentsWithDeepL(key, segments, sourceLang, targetLang,
                     body: deepLBody
                 })
             };
+        } else if (proxyProvider === 'corsproxy') {
+            fetchUrl = CONFIG.proxies.corsproxy + encodeURIComponent(deepLEndpoint);
         } else {
             let proxyBase = (proxyProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[proxyProvider];
             fetchUrl = proxyBase + deepLEndpoint;
@@ -1798,46 +1840,67 @@ async function verifyWithGroq(segments, deepLMap, useProxy) {
           payloadBody.reasoning_effort = "high"; payloadBody.max_completion_tokens = 65536; payloadBody.top_p = 1;
       }
 
-      let fetchUrl = llmEndpoint;
-      let fetchOptions = { method: "POST", headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(payloadBody) };
+      const attemptVerifyFetch = async (isProxy, pProvider) => {
+          let fetchUrl = llmEndpoint;
+          let fetchOptions = { method: "POST", headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(payloadBody) };
 
-      if (useProxy) {
-          if (proxyProvider === 'lovable') {
-                fetchUrl = CONFIG.proxies.lovable;
-                fetchOptions = {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
-                    body: JSON.stringify({
-                        url: llmEndpoint, method: 'POST', timeout: 300000, 
-                        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-                        body: payloadBody 
-                    })
-                };
-          } else {
-              let proxyBase = (proxyProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[proxyProvider];
-              fetchUrl = proxyBase + llmEndpoint;
-              if (proxyProvider === 'custom' && ui.proxyHeaderKey.value) fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+          if (isProxy) {
+              if (pProvider === 'lovable') {
+                    fetchUrl = CONFIG.proxies.lovable;
+                    fetchOptions = {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
+                        body: JSON.stringify({
+                            url: llmEndpoint, method: 'POST', timeout: 300000, 
+                            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                            body: payloadBody 
+                        })
+                    };
+              } else if (pProvider === 'corsproxy') {
+                    fetchUrl = CONFIG.proxies.corsproxy + encodeURIComponent(llmEndpoint);
+              } else {
+                  let proxyBase = (pProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[pProvider];
+                  fetchUrl = proxyBase + llmEndpoint;
+                  if (pProvider === 'custom' && ui.proxyHeaderKey.value) fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+              }
           }
-      }
+
+          const res = await fetch(fetchUrl, fetchOptions);
+          if(!res.ok) { const err = await res.text(); throw new Error(err); }
+          const data = await res.json();
+          return (pProvider === 'lovable' && isProxy && data.body) ? data.body.choices[0].message.content : data.choices[0].message.content;
+      };
 
       log(`Sending LLM Batch ${(i/CONFIG.llmBatchSize)+1} to Model: ${model}...`, "NET");
       try {
-          const res = await fetch(fetchUrl, fetchOptions);
-          if(!res.ok) { const err = await res.text(); log(`LLM Batch Failed. Keeping DeepL version.`, "WARN", err); continue; }
-          const data = await res.json();
-          let content = (proxyProvider === 'lovable' && useProxy && data.body) ? data.body.choices[0].message.content : data.choices[0].message.content;
-
+          let content = await attemptVerifyFetch(useProxy, proxyProvider);
           const improvedBatch = JSON.parse(content);
           for (const [orig, improvedTrans] of Object.entries(improvedBatch)) {
               if (finalMap.has(orig) && typeof improvedTrans === 'string') finalMap.set(orig, improvedTrans);
           }
           log(`LLM Batch ${(i/CONFIG.llmBatchSize)+1} Complete.`, "SUCCESS");
-      } catch (e) { log(`LLM Batch Error. Keeping DeepL version.`, "WARN", e.message); }
+      } catch (e) { 
+          log(`LLM Batch Error. Retrying with fallback...`, "WARN", e.message); 
+          try {
+              let content;
+              if (useProxy && proxyProvider !== 'corsproxy') content = await attemptVerifyFetch(true, 'corsproxy');
+              else if (!useProxy) content = await attemptVerifyFetch(true, 'corsproxy');
+              else content = await attemptVerifyFetch(false, null);
+
+              const improvedBatch = JSON.parse(content);
+              for (const [orig, improvedTrans] of Object.entries(improvedBatch)) {
+                  if (finalMap.has(orig) && typeof improvedTrans === 'string') finalMap.set(orig, improvedTrans);
+              }
+              log(`LLM Batch ${(i/CONFIG.llmBatchSize)+1} Fallback Complete.`, "SUCCESS");
+          } catch (fallbackErr) {
+              log(`LLM Batch Fallback Failed. Keeping DeepL version.`, "WARN", fallbackErr.message);
+          }
+      }
   }
   return finalMap;
 }
 
-// Full JSON Groq Translation Call
+// Full JSON Groq Translation Call (Robust with CORS Fallback)
 async function translateWithGroq(jsonStr, prompt, model, reasoningEffort, key, useProxy) {
   const proxyProvider = ui.proxyProvider.value;
   let llmEndpoint = "https://api.groq.com/openai/v1/chat/completions";
@@ -1858,33 +1921,53 @@ async function translateWithGroq(jsonStr, prompt, model, reasoningEffort, key, u
       messages[0].content += ` Reasoning Effort: ${reasoningEffort.toUpperCase()}.`;
   }
 
-  let fetchUrl = llmEndpoint;
-  let fetchOptions = { method: "POST", headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(payloadBody) };
+  const attemptFetch = async (isProxy, pProvider) => {
+      let fetchUrl = llmEndpoint;
+      let fetchOptions = { method: "POST", headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(payloadBody) };
 
-  if (useProxy) {
-      if (proxyProvider === 'lovable') {
-            fetchUrl = CONFIG.proxies.lovable;
-            fetchOptions = {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
-                body: JSON.stringify({
-                    url: llmEndpoint, method: 'POST', timeout: 300000, 
-                    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-                    body: payloadBody 
-                })
-            };
-      } else {
-          let proxyBase = (proxyProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[proxyProvider];
-          fetchUrl = proxyBase + llmEndpoint;
-          if (proxyProvider === 'custom' && ui.proxyHeaderKey.value) fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+      if (isProxy) {
+          if (pProvider === 'lovable') {
+                fetchUrl = CONFIG.proxies.lovable;
+                fetchOptions = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
+                    body: JSON.stringify({
+                        url: llmEndpoint, method: 'POST', timeout: 300000, 
+                        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                        body: payloadBody 
+                    })
+                };
+          } else if (pProvider === 'corsproxy') {
+                fetchUrl = CONFIG.proxies.corsproxy + encodeURIComponent(llmEndpoint);
+          } else {
+              let proxyBase = (pProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[pProvider];
+              fetchUrl = proxyBase + llmEndpoint;
+              if (pProvider === 'custom' && ui.proxyHeaderKey.value) fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+          }
+      }
+      
+      const res = await fetch(fetchUrl, fetchOptions);
+      if(!res.ok) throw new Error(`Groq API Error: ${res.status} - ${await res.text()}`);
+      const data = await res.json();
+      return (pProvider === 'lovable' && isProxy && data.body) ? data.body.choices[0].message.content : data.choices[0].message.content;
+  };
+
+  try {
+      let content = await attemptFetch(useProxy, proxyProvider);
+      return cleanJson(content);
+  } catch (err) {
+      log(`Primary Groq Translation failed: ${err.message}. Retrying with fallback CORS...`, "WARN");
+      try {
+          let fallbackContent;
+          if (useProxy && proxyProvider !== 'corsproxy') fallbackContent = await attemptFetch(true, 'corsproxy');
+          else if (!useProxy) fallbackContent = await attemptFetch(true, 'corsproxy');
+          else fallbackContent = await attemptFetch(false, null);
+          log(`Fallback successful!`, "SUCCESS");
+          return cleanJson(fallbackContent);
+      } catch (fallbackErr) {
+          throw new Error(`Groq API Error (All attempts failed). Last error: ${fallbackErr.message}`);
       }
   }
-  
-  const res = await fetch(fetchUrl, fetchOptions);
-  if(!res.ok) throw new Error(`Groq API Error: ${res.status}`);
-  const data = await res.json();
-  let content = (proxyProvider === 'lovable' && useProxy && data.body) ? data.body.choices[0].message.content : data.choices[0].message.content;
-  return cleanJson(content);
 }
 
 // Translation UI wiring
