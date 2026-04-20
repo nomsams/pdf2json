@@ -350,7 +350,7 @@
         <button style="width:auto; padding:2px 8px; font-size:10px" onclick="togglePreview()">Toggle Output</button>
       </div>
       <div class="card-body" style="flex:1; overflow:hidden;">
-        <!-- Changed to an editable textarea -->
+        <!-- Editable textarea for Live Preview -->
         <textarea id="groqInputPreview" class="preview-box" style="display:block; border-bottom:1px solid var(--line); margin-bottom:10px; height:200px; width:100%; resize:vertical;"></textarea>
         
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
@@ -938,14 +938,22 @@ function prettyPrintJson(raw) {
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch(e) { return raw; }
 }
 
+function highlightPlaceholders(text) {
+  if(!text) return '';
+  let safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return safe.replace(/{{IMG:[^}]+}}/g, '<span class="ph-tag">$&</span>');
+}
+
 function updateLiveGroqPreview() {
     const schema = ui.schemaIn.value || "No schema provided.";
     const markdown = state.markdown || "No text extracted yet.";
     const prompt = document.getElementById('groqPrompt').value || "";
 
-    const previewText = `=== JSON SCHEMA ===\n${schema}\n\n=== TEXT TO PROCESS ===\n${markdown}\n\n=== INSTRUCTIONS ===\n${prompt}`;
+    const previewText = `JSON Schema:\n${schema}\n\nText with Image Placeholders:\n${markdown}\n\n${prompt}`;
 
-    ui.groqInputPreview.value = previewText;
+    if (ui.groqInputPreview) {
+        ui.groqInputPreview.value = previewText;
+    }
 }
 
 function getImgIndex(id) {
@@ -1007,6 +1015,7 @@ function drawFlow() {
 
 /**
  * STEP 1: PDF INPUT & EXTRACTION
+ * (Reverted exactly to original working version)
  */
 ui.drop.addEventListener('click', () => ui.fileIn.click());
 ui.drop.addEventListener('dragover', e => { e.preventDefault(); ui.drop.classList.add('drag'); });
@@ -1262,7 +1271,6 @@ function updateMarkdownOutput() {
     }
 
     state.markdown = md.trim();
-    // We no longer highlight placeholders in the textarea, but we can still highlight them in the markdown output div
     ui.mdOut.innerHTML = highlightPlaceholders(state.markdown);
     updateLiveGroqPreview();
 }
