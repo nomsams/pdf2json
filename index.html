@@ -350,7 +350,8 @@
         <button style="width:auto; padding:2px 8px; font-size:10px" onclick="togglePreview()">Toggle Output</button>
       </div>
       <div class="card-body" style="flex:1; overflow:hidden;">
-        <div id="groqInputPreview" class="preview-box" style="display:block; border-bottom:1px solid var(--line); margin-bottom:10px; height:200px;"></div>
+        <!-- Changed to an editable textarea -->
+        <textarea id="groqInputPreview" class="preview-box" style="display:block; border-bottom:1px solid var(--line); margin-bottom:10px; height:200px; width:100%; resize:vertical;"></textarea>
         
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
             <span class="card-title" style="font-size:12px;">Groq Output (Editable JSON)</span>
@@ -379,6 +380,10 @@
 
       <div class="card-body">
         <div class="settings-group" style="margin-top:0;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:5px">
+            <label style="margin:0">Use CORS Proxy (Translation)</label>
+            <div id="transCorsToggle" class="switch on" title="Use Proxy for Translation API calls"></div>
+          </div>
           <label>Translation Engine</label>
           <select id="transEngine">
             <option value="deepl">DeepL API</option>
@@ -674,6 +679,7 @@ const ui = {
   // Translation UI
   cardTranslation: document.getElementById('cardTranslation'),
   transToggle: document.getElementById('transToggle'),
+  transCorsToggle: document.getElementById('transCorsToggle'),
   transEngine: document.getElementById('transEngine'),
   deeplTransSettings: document.getElementById('deeplTransSettings'),
   groqTransSettings: document.getElementById('groqTransSettings'),
@@ -932,30 +938,14 @@ function prettyPrintJson(raw) {
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch(e) { return raw; }
 }
 
-function highlightPlaceholders(text) {
-  if(!text) return '';
-  let safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return safe.replace(/{{IMG:[^}]+}}/g, '<span class="ph-tag">$&</span>');
-}
-
 function updateLiveGroqPreview() {
     const schema = ui.schemaIn.value || "No schema provided.";
     const markdown = state.markdown || "No text extracted yet.";
     const prompt = document.getElementById('groqPrompt').value || "";
 
-    const previewText = `[SYSTEM]
-You are a data extraction assistant. Output valid JSON only.
+    const previewText = `=== JSON SCHEMA ===\n${schema}\n\n=== TEXT TO PROCESS ===\n${markdown}\n\n=== INSTRUCTIONS ===\n${prompt}`;
 
-[USER - JSON Schema]
-${schema}
-
-[USER - Text with Image Placeholders]
-${markdown}
-
-[USER - Prompt Instruction]
-${prompt}`;
-
-    ui.groqInputPreview.innerHTML = highlightPlaceholders(previewText);
+    ui.groqInputPreview.value = previewText;
 }
 
 function getImgIndex(id) {
@@ -1272,6 +1262,7 @@ function updateMarkdownOutput() {
     }
 
     state.markdown = md.trim();
+    // We no longer highlight placeholders in the textarea, but we can still highlight them in the markdown output div
     ui.mdOut.innerHTML = highlightPlaceholders(state.markdown);
     updateLiveGroqPreview();
 }
@@ -1533,9 +1524,7 @@ function cleanJson(str) {
 
 ui.btn2.addEventListener('click', async () => {
   const key = ui.groqKey.value;
-  const schema = ui.schemaIn.value;
   if(!key) return alert("API Key required");
-  if(!schema) return alert("Schema required");
 
   ui.btn2.disabled = true;
   setProgress(2, 10, "Preparing Request...");
@@ -1544,13 +1533,13 @@ ui.btn2.addEventListener('click', async () => {
   const reasoningEffort = document.getElementById('reasoningEffort').value;
   const useProxy = document.getElementById('globalCorsToggle').classList.contains('on');
   const proxyProvider = document.getElementById('proxyProvider').value;
-  const prompt = document.getElementById('groqPrompt').value;
+  
+  // Read directly from the editable preview textarea
+  const finalPrompt = ui.groqInputPreview.value;
 
   const messages = [
     { role: "system", content: "You are a data extraction assistant. Output valid JSON only." },
-    { role: "user", content: `JSON Schema:\n${schema}` },
-    { role: "user", content: `Text with Image Placeholders:\n${state.markdown}` },
-    { role: "user", content: prompt }
+    { role: "user", content: finalPrompt }
   ];
 
   try {
@@ -2042,7 +2031,7 @@ async function runTranslation() {
       setTransProgress(30, "Requesting DeepL translation...");
       const srcLang = ui.deeplSource.value || '';
       const tgtLang = ui.deeplTarget.value || 'SV';
-      const useProxy = ui.globalCorsToggle.classList.contains('on');
+      const useProxy = ui.transCorsToggle.classList.contains('on');
 
       const translatedSegments = await translateSegmentsWithDeepL(key, uniqueSegments, srcLang, tgtLang, useProxy);
 
@@ -2074,7 +2063,7 @@ async function runTranslation() {
       const prompt = ui.transPromptInput.value;
       const model = ui.transGroqModel.value;
       const reasoningEffort = ui.transReasoningEffort.value;
-      const useProxy = ui.globalCorsToggle.classList.contains('on'); 
+      const useProxy = ui.transCorsToggle.classList.contains('on'); 
 
       const translatedJsonStr = await translateWithGroq(raw, prompt, model, reasoningEffort, key, useProxy);
       
