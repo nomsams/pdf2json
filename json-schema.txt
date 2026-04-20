@@ -1,3 +1,7 @@
+Your objective is to take an OCR of a PDF quote in text formand sort all that text into a json according to the json schema below with the help of the provided example. Make sure not to ommit any information from the quote - all text and all details have to be included without ommision or summarization. 
+
+JSON Schema: 
+
 # Offert JSON Schema – Version 94 (Offert-webapp)
 # Values in parentheses give default or preset values.
 # IMPORTANT! If you see "d" in the parentheses, then use that value when other info is NOT found.
