@@ -1933,15 +1933,18 @@ async function translateWithGroq(jsonStr, prompt, model, reasoningEffort, key, u
       { role: "user", content: jsonStr }
   ];
   
-  const payloadBody = {
-      model: model,
-      messages: messages,
-      temperature: 0.1,
-      response_format: { type: "json_object" }
-  };
+      const payloadBody = {
+        model: model,
+        messages: messages,
+        temperature: 0.1,
+        top_p: 1,
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" }
+    };
 
   if (model === 'openai/gpt-oss-120b') {
       messages[0].content += ` Reasoning Effort: ${reasoningEffort.toUpperCase()}.`;
+  payloadBody.max_completion_tokens = 65536; // <--- Override for massive output models
   }
 
   const attemptFetch = async (isProxy, pProvider) => {
