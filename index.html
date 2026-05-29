@@ -329,26 +329,35 @@
           <label>Prompt Instruction</label>
           <textarea id="groqPrompt" style="height:120px">Output a JSON using the text provided while modeling the JSON according to the schema provided. That is, create a JSON according to the JSON schema and populate it with the text from the text provided. Most text is in chronological order.
 
-### CRITICAL RULE 1: PAGE BREAK & REPEATING HEADER HANDLING ###
-The OCR text often spans multiple pages. You will frequently see repetitive page headers, footers, or table column names interrupting a continuous item description. These interruptions typically look like:
-- The issuing company's name and address repeating.
-- Invoice, Quote, or Proforma numbers repeating.
-- Page numbers (e.g., "Page 2 of 4").
-- Repeating table headers (e.g., "Item | Q.ty | Description | Unit Price | Tot.").
+### CRITICAL OVERRIDE 1: THE "INVISIBLE HEADER" RULE ###
+You are currently failing to extract the full text for items that span multiple pages. You are being tricked by the repeating table headers. 
 
-INSTRUCTION: When you encounter these recurring blocks in the middle of an item's details, DO NOT STOP parsing the current item. You must IGNORE the recurring header/footer/table-header text and CONTINUE appending the actual product details that follow directly into the CURRENT `itemDescription` string or into a place that fits according to the schema but dont just skip that text. An item is ONLY finished when you see a clear, brand-new sequential line item (e.g., a new item number or clear new product row) or a final summary section like "Totals", "Accessories", or "Terms and Conditions".
+Whenever you see a page break, a line of dashes (`---`), or repeating column headers like:
+"MARINI S.R.L... Via Beura..."
+"Proforma No..."
+"Item Q.ty Description Unit Price Disc. Tot. NET Price"
+"EURO % EURO"
 
-### CRITICAL RULE 2: HTML FORMATTING & EXACT CHARACTERS ###
-When converting the text into HTML for the `itemDescription` field:
-- PRESERVE ALL PUNCTUATION: Do NOT remove hyphens (-), bullet points (•), asterisks (*), or any other original list characters.
-- If you use `<ul><li>` tags to format lists, you must keep the original hyphen or bullet inside the list item. 
-  - Correct: `<li>- Base primer with rust protection</li>`
-  - Wrong: `<li>Base primer with rust protection</li>`
-- Alternatively, you can use `<br>` tags to separate the lines exactly as they appear in the source text, ensuring zero characters are lost.
+You MUST treat this text as INVISIBLE. DO NOT close the `itemDescription` string. DO NOT move on to the next item. You must IGNORE the header and CONTINUE appending the bullet points that follow directly into the current item's description. 
 
-!IMPORTANT: DO NOT summarize, shorten, or truncate item descriptions. Items often span across multiple pages with long lists of specifications. You must capture every single bullet point and line of text for each item until that specific item is definitively finished.
-!IMPORTANT: Keep the image placeholder tags ({{IMG:...}}) exactly as they are and in their original order compared to the rest of the JSON structure.
-!IMPORTANT: Accuracy is paramount. If a hyphen, bullet point, or specific phrasing is in the OCR, it MUST be in the JSON exactly as written.</textarea>
+ABSOLUTE STOP CONDITION: An item ONLY ends when you hit a brand new item number (e.g., "1.2") or a distinct section header like "ACCESSORIES" or "TOTAL". Until you see "1.2", EVERYTHING belongs inside the description for 1.1.
+
+### CRITICAL OVERRIDE 2: BAN ON HTML LISTS (PUNCTUATION PRESERVATION) ###
+You are currently stripping out hyphens (-) and bullet points (•) from the text. This is strictly forbidden. 
+
+To prevent this, you are BANNED from using `<ul>` and `<li>` tags in the `itemDescription`. 
+Instead, you MUST format the text using ONLY `<br>` tags for line breaks, and you MUST type the exact hyphen or bullet point at the start of the line.
+
+CORRECT FORMAT EXAMPLE:
+"• Rotary head / Drifter mounting plate<br><br>- Mounting plate for drifter mod.DF540 L<br><br>• Hydraulic drifter Doofor mod. DF 540 L<br><br>- Percussion energy 14 kW<br>- Motor 160 cc<br>- Shank for rods T38"
+
+WRONG FORMAT EXAMPLE (DO NOT DO THIS):
+"<ul><li>Rotary head...</li><li>Mounting plate...</li></ul>"
+
+!IMPORTANT: DO NOT summarize, shorten, or truncate item descriptions. You must capture every single bullet point and line of text for each item until that specific item is definitively finished.
+!IMPORTANT: Keep the image placeholder tags ({{IMG:...}}) exactly as they are and in their original order.
+!IMPORTANT: Accuracy is paramount. If a hyphen, bullet point, or specific phrasing is in the OCR, it MUST be in the JSON exactly as written.
+          !IMPORTANT dont skip any text for any reason all text should be put somewhere in the json </textarea>
         </div>
 
         <button id="btnStep2" class="primary" style="width:100%" disabled>Run Structuring</button>
