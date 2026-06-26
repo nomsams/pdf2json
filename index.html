@@ -246,8 +246,11 @@
             <button id="btnNextPage" disabled>Next</button>
         </div>
 
-        <label style="margin-top:10px">Markdown Output (Placeholders Injected)</label>
-        <div id="mdOutput" class="preview-box" style="height:500px"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; margin-bottom:4px;">
+          <label style="margin:0">Markdown Output (Editable)</label>
+          <button style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('mdOutput')">Copy</button>
+        </div>
+        <textarea id="mdOutput" class="preview-box" style="height:500px; width:100%; resize:vertical;"></textarea>
       </div>
     </div>
   </div>
@@ -257,7 +260,11 @@
     <div class="card" id="cardStep2">
       <div class="card-head">
         <span class="card-title">2. Structure Data</span>
-        <span class="badge">Groq LLM</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; color:var(--text-dim)">Pre-Process</span>
+            <div id="preProcessToggle" class="switch"></div>
+            <span class="badge" style="margin-left:8px;">Groq LLM</span>
+        </div>
       </div>
 
       <div class="card-body">
@@ -314,6 +321,22 @@
                  <input type="text" id="proxyUrl" placeholder="https://...">
               </div>
             </div>
+        </div>
+
+        <!-- NEW PRE-PROCESS MODULE -->
+        <div id="preProcessModule" class="settings-group hidden" style="margin-bottom: 10px;">
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+             <label style="color:var(--accent); margin:0;">Pre-Processing Prompt (Data Cleaning)</label>
+             <button id="loadDefaultPrePrompt" style="width:auto; font-size:10px; padding:2px 8px;">Load Default</button>
+           </div>
+           <textarea id="prePromptInput" style="height:80px;" placeholder="Clean the following OCR text..."></textarea>
+           <button id="btnRunPreProcess" class="primary" style="width:100%; margin-top:8px;">Run Pre-Processing</button>
+           
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; margin-bottom:4px;">
+             <label style="margin:0">Pre-Process Output (Editable)</label>
+             <button style="width:auto; padding:2px 8px; font-size:10px" onclick="copyToClip('preProcessOutput')">Copy</button>
+           </div>
+           <textarea id="preProcessOutput" class="preview-box" style="height:120px; width:100%; resize:vertical;"></textarea>
         </div>
 
         <div>
@@ -665,6 +688,10 @@ const state = {
   aborts: { step1: null },
   ocrWorker: null,
   
+  // Pre-Processing State
+  preProcessEnabled: false,
+  preProcessOutput: "",
+
   // Translation state
   translationEnabled: false,
   transInputRaw: "",
@@ -706,6 +733,14 @@ const ui = {
   groqModel: document.getElementById('groqModel'),
   reasoningEffort: document.getElementById('reasoningEffort'),
   
+  // Pre-Process UI
+  preProcessToggle: document.getElementById('preProcessToggle'),
+  preProcessModule: document.getElementById('preProcessModule'),
+  prePromptInput: document.getElementById('prePromptInput'),
+  btnRunPreProcess: document.getElementById('btnRunPreProcess'),
+  preProcessOutput: document.getElementById('preProcessOutput'),
+  loadDefaultPrePrompt: document.getElementById('loadDefaultPrePrompt'),
+
   // Translation UI
   cardTranslation: document.getElementById('cardTranslation'),
   transToggle: document.getElementById('transToggle'),
@@ -843,6 +878,15 @@ const ui = {
       ui.verifySettings.classList.toggle('hidden', !ui.verifyToggle.classList.contains('on'));
   });
 
+  // Pre-Process Toggle
+  ui.preProcessToggle.addEventListener('click', () => {
+      state.preProcessEnabled = !state.preProcessEnabled;
+      ui.preProcessToggle.classList.toggle('on', state.preProcessEnabled);
+      ui.preProcessModule.classList.toggle('hidden', !state.preProcessEnabled);
+      updateLiveGroqPreview();
+      log(`Pre-Processing ${state.preProcessEnabled ? 'Enabled' : 'Disabled'}`, "INFO");
+  });
+
   document.getElementById('glossaryFile').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if(f) ui.glossaryInput.value = await f.text();
@@ -868,6 +912,24 @@ const ui = {
     }
   });
 
+  // Load Pre-Prompt
+  const loadPrePrompt = async () => {
+    try {
+      let res = await fetch('preprompt.txt');
+      if(res.ok) { 
+          ui.prePromptInput.value = await res.text(); 
+          log("Loaded pre-prompt from file.", "SUCCESS"); 
+      } else {
+          ui.prePromptInput.value = "You are a data cleaning assistant. Fix OCR errors, remove redundant headers/footers, and format the text cleanly while preserving all image placeholders exactly as they are.";
+          log("No preprompt.txt found. Using default.", "WARN");
+      }
+    } catch(e) {
+      ui.prePromptInput.value = "You are a data cleaning assistant. Fix OCR errors, remove redundant headers/footers, and format the text cleanly while preserving all image placeholders exactly as they are.";
+    }
+  };
+  await loadPrePrompt();
+  ui.loadDefaultPrePrompt.addEventListener('click', loadPrePrompt);
+
   // Load Translation Prompt
   const loadTransPrompt = async () => {
     try {
@@ -886,7 +948,7 @@ const ui = {
 
   // General Toggles
   document.querySelectorAll('.switch').forEach(el => {
-    if(el.id !== 'transToggle' && el.id !== 'globalCorsToggle' && el.id !== 'verifyToggle') { 
+    if(el.id !== 'transToggle' && el.id !== 'globalCorsToggle' && el.id !== 'verifyToggle' && el.id !== 'preProcessToggle') { 
         el.addEventListener('click', () => el.classList.toggle('on'));
     }
   });
@@ -896,12 +958,23 @@ const ui = {
   ui.btnNextPage.addEventListener('click', () => changeGalleryPage(1));
 
   // Sync Textareas with State
+  ui.mdOut.addEventListener('input', (e) => { 
+      state.markdown = e.target.value; 
+      updateLiveGroqPreview(); 
+  });
+  ui.preProcessOutput.addEventListener('input', (e) => { 
+      state.preProcessOutput = e.target.value; 
+      updateLiveGroqPreview(); 
+  });
   ui.jsonOut.addEventListener('input', (e) => { state.groqJson = e.target.value; });
   ui.transOutputPreview.addEventListener('input', (e) => { state.transOutputRaw = e.target.value; });
 
   // Live Preview Listeners
   ui.schemaIn.addEventListener('input', updateLiveGroqPreview);
   document.getElementById('groqPrompt').addEventListener('input', updateLiveGroqPreview);
+
+  // Run Pre-Process
+  ui.btnRunPreProcess.addEventListener('click', runPreProcess);
 
   // Revert Buttons
   ui.btnRevertGroq.addEventListener('click', () => {
@@ -976,10 +1049,10 @@ function highlightPlaceholders(text) {
 
 function updateLiveGroqPreview() {
     const schema = ui.schemaIn.value || "No schema provided.";
-    const markdown = state.markdown || "No text extracted yet.";
+    const textToProcess = (state.preProcessEnabled && state.preProcessOutput) ? state.preProcessOutput : (state.markdown || "No text extracted yet.");
     const prompt = document.getElementById('groqPrompt').value || "";
 
-    const previewText = `JSON Schema:\n${schema}\n\nText with Image Placeholders:\n${markdown}\n\n${prompt}`;
+    const previewText = `JSON Schema:\n${schema}\n\nText with Image Placeholders:\n${textToProcess}\n\n${prompt}`;
 
     if (ui.groqInputPreview) {
         ui.groqInputPreview.value = previewText;
@@ -1045,7 +1118,6 @@ function drawFlow() {
 
 /**
  * STEP 1: PDF INPUT & EXTRACTION
- * (Reverted exactly to original working version)
  */
 ui.drop.addEventListener('click', () => ui.fileIn.click());
 ui.drop.addEventListener('dragover', e => { e.preventDefault(); ui.drop.classList.add('drag'); });
@@ -1138,7 +1210,7 @@ function resetStep1() {
   state.rawDeepSeekText = "";
   state.markdown = "";
   ui.gallery.innerHTML = "";
-  ui.mdOut.innerHTML = "";
+  ui.mdOut.value = "";
   state.step1Done = false;
   drawFlow();
   setProgress(1, 0, "Starting...");
@@ -1301,7 +1373,7 @@ function updateMarkdownOutput() {
     }
 
     state.markdown = md.trim();
-    ui.mdOut.innerHTML = highlightPlaceholders(state.markdown);
+    ui.mdOut.value = state.markdown;
     updateLiveGroqPreview();
 }
 
@@ -1553,11 +1625,110 @@ function injectPlaceholdersSimple(text) {
 }
 
 /**
- * STEP 2: GROQ STRUCTURING
+ * STEP 2: GROQ STRUCTURING & PRE-PROCESSING
  */
 function cleanJson(str) {
   if (!str) return "";
   return str.replace(/```json/g, '').replace(/```/g, '').trim();
+}
+
+async function runPreProcess() {
+    const key = ui.groqKey.value;
+    if(!key) return alert("Groq API Key required");
+
+    ui.btnRunPreProcess.disabled = true;
+    const originalText = ui.btnRunPreProcess.textContent;
+    ui.btnRunPreProcess.textContent = "Processing...";
+
+    const model = document.getElementById('groqModel').value;
+    const reasoningEffort = document.getElementById('reasoningEffort').value;
+    const useProxy = document.getElementById('globalCorsToggle').classList.contains('on');
+    const proxyProvider = document.getElementById('proxyProvider').value;
+
+    const sysPrompt = ui.prePromptInput.value || "Clean the following text.";
+    const userText = state.markdown || ui.mdOut.value;
+
+    const messages = [
+        { role: "system", content: sysPrompt },
+        { role: "user", content: userText }
+    ];
+
+    const payload = {
+        model: model,
+        messages: messages,
+        temperature: 0.1,
+        top_p: 1,
+        max_completion_tokens: 32000
+    };
+
+    if (model === 'openai/gpt-oss-120b') {
+        messages[0].content += ` Reasoning Effort: ${reasoningEffort.toUpperCase()}.`;
+    }
+
+    const attemptFetch = async (isProxy, pProvider) => {
+        let fetchUrl = "https://api.groq.com/openai/v1/chat/completions";
+        let fetchOptions = {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        };
+
+        if (isProxy) {
+            if (pProvider === 'lovable') {
+                fetchUrl = CONFIG.proxies.lovable;
+                fetchOptions = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', [ui.proxyHeaderKey.value]: ui.proxyHeaderVal.value },
+                    body: JSON.stringify({
+                        url: "https://api.groq.com/openai/v1/chat/completions",
+                        method: 'POST',
+                        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                        body: payload
+                    })
+                };
+            } else if (pProvider === 'corsproxy') {
+                fetchUrl = CONFIG.proxies.corsproxy + encodeURIComponent("https://api.groq.com/openai/v1/chat/completions");
+            } else {
+                let proxyBase = (pProvider === 'custom') ? ui.proxyUrl.value.trim() : CONFIG.proxies[pProvider];
+                fetchUrl = proxyBase + "https://api.groq.com/openai/v1/chat/completions";
+                if (pProvider === 'custom' && ui.proxyHeaderKey.value) {
+                    fetchOptions.headers[ui.proxyHeaderKey.value] = ui.proxyHeaderVal.value;
+                }
+            }
+        }
+
+        const res = await fetch(fetchUrl, fetchOptions);
+        if(!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Groq API Error: ${res.status} - ${errText.substring(0, 150)}`);
+        }
+        const data = await res.json();
+        return (pProvider === 'lovable' && isProxy && data.body) ? data.body.choices[0].message.content : data.choices[0].message.content;
+    };
+
+    try {
+        log("Sending to Groq for Pre-Processing...", "INFO");
+        let content;
+        try {
+            content = await attemptFetch(useProxy, proxyProvider);
+        } catch (err) {
+            log(`Primary Pre-Process failed: ${err.message}. Retrying with fallback CORS...`, "WARN");
+            if (useProxy && proxyProvider !== 'corsproxy') content = await attemptFetch(true, 'corsproxy');
+            else if (!useProxy) content = await attemptFetch(true, 'corsproxy');
+            else content = await attemptFetch(false, null);
+        }
+        
+        state.preProcessOutput = content;
+        ui.preProcessOutput.value = content;
+        updateLiveGroqPreview();
+        log("Pre-Processing Complete", "SUCCESS");
+    } catch (e) {
+        log("Pre-Processing Failed: " + e.message, "ERR");
+        alert("Pre-Processing Failed: " + e.message);
+    } finally {
+        ui.btnRunPreProcess.disabled = false;
+        ui.btnRunPreProcess.textContent = originalText;
+    }
 }
 
 ui.btn2.addEventListener('click', async () => {
