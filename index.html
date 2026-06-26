@@ -331,23 +331,37 @@
 
 To successfully parse multi-page quotes and avoid dropping text, you MUST follow these 4 algorithmic rules:
 
-### CRITICAL OVERRIDE 1: THE "KEEP THE STRING OPEN" RULE (PAGE BREAKS) ###
-Your biggest mistake is closing the `itemDescription` string and finishing the item too early. 
-Quotes span multiple pages. When you reach the bottom of a page, you will see repeating junk text (e.g., Company names, addresses, "Proforma No.", table headers like "Item Q.ty Description Unit Price", and lines of dashes "---").
-ACTION: When you see this junk text, DO NOT close the JSON string. DO NOT end the item. You must keep the `itemDescription` string OPEN, skip the junk lines, and RESUME appending the text from the top of the next page into the exact same string. The item is NOT finished.
+### CRITICAL OVERRIDE 1: PROPER USE OF `subItems` ARRAY ###
+You must correctly separate Main Items from their sub-components. 
+- MAIN ITEMS: Denoted by a sequential decimal number (e.g., "1.1", "2.2", "2.4", or "2,5" - note that commas act as decimals). Create a new object in the main `items` array for these.
+- SUB-ITEMS: Inside a main item, you will see sub-components that start with a standalone Quantity integer (e.g., "1 • Track carriage", "1 • Chassis", "2 - Inserts kit for clamp"). 
+ACTION: When you see a component with a quantity, DO NOT just append it to the main `itemDescription`. You MUST create a new object inside the main item's `subItems` array!
+  - `subItemQuantity`: The integer at the start of the line (e.g., 1, 2).
+  - `subItemName`: The title of the component (e.g., "Track carriage", "Inserts kit for clamp").
+  - `subItemDescription`: Any bullet points that belong to this component.
+  - `subItemOriginalPrice`: 0 (unless a separate price is explicitly listed on that line).
 
-### CRITICAL OVERRIDE 2: NO ORPHANED TEXT (THE COMPONENT RULE) ###
-Main items (like 1.1) contain DOZENS of sub-components spanning multiple pages (e.g., "1 • Track carriage", "1 • Articulations", "1 • Sensors kit").
-ACTION: You must never skip these. Because they do not have a new main decimal index (like 1.2 or 2.1), they are NOT new items. They are continuous text that belongs to the last main item you opened. You must append their titles, descriptions, and bullet points directly into the current `itemDescription` using `<br>` tags. 
-ABSOLUTE STOP CONDITION: You may ONLY close the current item when you physically see the next main sequence number (e.g., "2.1") or a major document section (e.g., "GENERAL SALE CONDITIONS"). Until you see that trigger, keep appending!
+### CRITICAL OVERRIDE 2: THE "ORPHANED TEXT" PAGE BREAK RULE ###
+Many items and sub-items span across page breaks. When you see a page break and repeating headers (e.g., "MARINI S.R.L.", "Proforma No...", "Item Q.ty Description..."), the current item is NOT finished.
+ACTION: You MUST look at the very first line of text *after* the junk header on the new page. 
+If that line is a bullet point, a hyphen (e.g., "- Centralized air lubricator..."), or a continuation of a sentence, it BELONGS to the item or sub-item from the previous page. You must capture it. Do not drop text just because a page break interrupted it!
 
-### CRITICAL OVERRIDE 3: PRESERVE EXACT PUNCTUATION (NO HTML LISTS) ###
+### CRITICAL OVERRIDE 3: ZERO OMISSIONS (READ LINE-BY-LINE) ###
+You are currently truncating text right before page breaks. 
+- You MUST capture the final lines at the bottom of a page (e.g., "- Flushing head 2\" for water,air,concrete").
+- You MUST capture the top lines of the next page (e.g., "- Centralized air lubricator 2\"...").
+- Keep image placeholders ({{IMG:...}}) exactly where they appear.
+
+### CRITICAL OVERRIDE 4: PRESERVE EXACT TEXT & PUNCTUATION ###
 You are BANNED from using `<ul>` and `<li>` tags. 
 Instead, you MUST use `<br>` for line breaks, and manually type the exact hyphens (-) and bullet points (•) exactly as they appear in the OCR.
-CORRECT FORMAT: "• Track carriage<br><br>- Variable track width...<br><br>• Chassis"
+CORRECT FORMAT FOR DESCRIPTIONS: "- Variable track width...<br>- Track wheel base..."
 
-### CRITICAL OVERRIDE 4: 100% TEXT RETENTION ###
-Every single word from the OCR (except repeating headers) must end up in the JSON. If there is a line describing a "Mast", a "Water pump", or a "Safe move kit", it MUST be captured. Do not summarize. Do not skip. Keep image placeholders ({{IMG:...}}) exactly where they belong.</textarea>
+!IMPORTANT: DO NOT summarize, shorten, or truncate item descriptions. You must capture every single bullet point and line of text for each item until that specific item is definitively finished.
+!IMPORTANT: Keep the image placeholder tags ({{IMG:...}}) exactly as they are and in their original order.
+!IMPORTANT: Accuracy is paramount. If a hyphen, bullet point, or specific phrasing is in the OCR, it MUST be in the JSON exactly as written.
+!IMPORTANT dont skip any text for any reason all text should be put somewhere in the json    
+          </textarea>
         </div>
 
         <button id="btnStep2" class="primary" style="width:100%" disabled>Run Structuring</button>
