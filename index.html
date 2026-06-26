@@ -327,37 +327,41 @@
 
         <div>
           <label>Prompt Instruction</label>
-          <textarea id="groqPrompt" style="height:120px">Output a JSON using the text provided while modeling the JSON according to the schema provided. That is, create a JSON according to the JSON schema and populate it with the text from the text provided. Most text is in chronological order.
+          <textarea id="groqPrompt" style="height:120px">Output a JSON using the OCR text provided, strictly adhering to the JSON schema. You must capture every single detail, specification, and price. Most text is in chronological order.
 
-### CRITICAL OVERRIDE 1: THE "INVISIBLE HEADER" RULE ###
-You are currently failing to extract the full text for items that span multiple pages. You are being tricked by the repeating table headers. 
+To successfully parse multi-page quotes, you MUST follow these critical rules:
 
-Whenever you see a page break, a line of dashes (`---`), or repeating column headers like:
-"MARINI S.R.L... Via Beura..."
-"Proforma No..."
-"Item Q.ty Description Unit Price Disc. Tot. NET Price"
-"EURO % EURO"
+### CRITICAL OVERRIDE 1: IGNORE REPEATING PAGE HEADERS ###
+Quotes often span multiple pages, meaning the description of a single item will be interrupted by page breaks. 
+Whenever you encounter "junk" text that clearly belongs to a page header or footer, YOU MUST TREAT IT AS INVISIBLE. Do not close the `itemDescription` string. Do not start a new item. Ignore the text and CONTINUE appending the bullet points from the next page into the current item or subitem.
+Examples of repeating junk text to skip:
+- Company names, addresses, and contact info repeating at the top/bottom of a page.
+- Document/Quote numbers or dates repeating.
+- "Page X of Y"
+- Repeating table column headers (e.g., "Item", "Q.ty", "Description", "Unit Price", "Total", "EURO").
+- Lines of dashes (---) used as visual separators.
 
-You MUST treat this text as INVISIBLE. DO NOT close the `itemDescription` string. DO NOT move on to the next item. You must IGNORE the header and CONTINUE appending the bullet points that follow directly into the current item's description. 
+### CRITICAL OVERRIDE 2: MAIN ITEMS VS. COMPONENT QUANTITIES ###
+You must correctly distinguish between a completely NEW quoted item and a SUB-COMPONENT belonging to the current item.
+- NEW MAIN ITEM: Usually denoted by a sequential decimal or main number (e.g., "1.1", "1.2", "2.", "Item 3"). ONLY create a new JSON `{ "type": "item" }` object when you hit a definitive new main item.
+- COMPONENT QUANTITIES: Lines inside a description often start with a single integer representing the quantity of that part (e.g., "1 • Track carriage", "2 - Inserts kit", "4x Screws"). 
+DO NOT create new JSON items for these. If you see a standalone integer followed by a bullet, hyphen, or part name, it is a component. Append it directly into the `itemDescription` of the currently active main item. 
+ABSOLUTE STOP CONDITION: An item's text ONLY ends when you hit the next sequential main item number or a completely new document section (like "OPTIONS", "ACCESSORIES", or "TOTAL").
 
-ABSOLUTE STOP CONDITION: An item ONLY ends when you hit a brand new item number (e.g., "1.2") or a distinct section header like "ACCESSORIES" or "TOTAL". Until you see "1.2", EVERYTHING belongs inside the description for 1.1.
-
-### CRITICAL OVERRIDE 2: BAN ON HTML LISTS (PUNCTUATION PRESERVATION) ###
+### CRITICAL OVERRIDE 3: BAN ON HTML LISTS (PUNCTUATION PRESERVATION) ###
 You are currently stripping out hyphens (-) and bullet points (•) from the text. This is strictly forbidden. 
-
-To prevent this, you are BANNED from using `<ul>` and `<li>` tags in the `itemDescription`. 
-Instead, you MUST format the text using ONLY `<br>` tags for line breaks, and you MUST type the exact hyphen or bullet point at the start of the line.
+You are BANNED from using `<ul>` and `<li>` tags in the `itemDescription`. 
+Instead, you MUST format the text using ONLY `<br>` tags for line breaks, and you MUST type the exact hyphen or bullet point at the start of the line exactly as it appears in the OCR.
 
 CORRECT FORMAT EXAMPLE:
-"• Rotary head / Drifter mounting plate<br><br>- Mounting plate for drifter mod.DF540 L<br><br>• Hydraulic drifter Doofor mod. DF 540 L<br><br>- Percussion energy 14 kW<br>- Motor 160 cc<br>- Shank for rods T38"
+"• Rotary head / Drifter mounting plate<br><br>- Mounting plate for drifter mod.DF540 L<br><br>• Hydraulic drifter mod. DF 540<br><br>- Percussion energy 14 kW"
 
 WRONG FORMAT EXAMPLE (DO NOT DO THIS):
 "<ul><li>Rotary head...</li><li>Mounting plate...</li></ul>"
 
-!IMPORTANT: DO NOT summarize, shorten, or truncate item descriptions. You must capture every single bullet point and line of text for each item until that specific item is definitively finished.
-!IMPORTANT: Keep the image placeholder tags ({{IMG:...}}) exactly as they are and in their original order.
-!IMPORTANT: Accuracy is paramount. If a hyphen, bullet point, or specific phrasing is in the OCR, it MUST be in the JSON exactly as written.
-          !IMPORTANT dont skip any text for any reason all text should be put somewhere in the json </textarea>
+### CRITICAL OVERRIDE 4: ZERO OMISSIONS ###
+!IMPORTANT: Do not summarize, shorten, or truncate item descriptions. You must capture every single bullet point, technical specification, and note. If it exists in the OCR, it MUST be in the JSON.
+!IMPORTANT: Keep any image placeholder tags (e.g., {{IMG:...}}) exactly as they are, in their original order.</textarea>
         </div>
 
         <button id="btnStep2" class="primary" style="width:100%" disabled>Run Structuring</button>
@@ -1585,7 +1589,7 @@ ui.btn2.addEventListener('click', async () => {
         messages: messages,
         temperature: 0.1,
         top_p: 1,
-        max_completion_tokens: 8192,
+        max_completion_tokens: 81920,
         response_format: { type: "json_object" }
     };
 
