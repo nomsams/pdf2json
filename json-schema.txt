@@ -323,3 +323,13 @@ EXEMPEL: -----------------------
     "lesseeText": "Hyrestagare"
   }
 }
+
+
+# General notes
+- All numeric prices should use dot as decimal separator (e.g. 11.5, 5700.00).
+- HTML is allowed inside description-like fields (**itemDescription**, **subItemDescription**, **terms[]**, **infoImages[].content**).
+- STRICT CONTINUATION: An item description is often massive and spans multiple pages. Even if you have already found the price and name for an item at the top, you MUST keep appending all subsequent components and text into its `itemDescription` until you physically hit the next sequential item number.
+- When generating JSON for the app, it is safe to:
+  - Set all computed target prices (**targetPrice**, **subItemTargetPrice**) to 0.
+  - Omit **itemNumber** / **subItemNumber** and let the app renumber automatically.
+  - Omit optional fields; the app will backfill defaults as described above.
