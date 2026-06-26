@@ -24,6 +24,22 @@ Warranty: 12 months from start up date, 14 months from shipping date or 1000 wor
 Lead time: Approx. 140 / 160 Working days.
 Quote validity: 30 Days.
 
+AND 
+
+"INSTALLATION COST AND TRAINING:
+- Technician cost per day (from date of departure to return) Euro: 850,00
+ - Permanence (Hotel, internal transport .....)   At costumer's charge  
+ - Flight ticket   At costumer's charge
+  
+PAYMENT :
+ Down payment : 20% at the order, 80% before shipment.
+"
+
+With 
+Payment: 20% before, 80% before shipment
+Technichian: 850 EUR per day (excluding flight ticket, stay, internal transport)
+
+
 1. Remove repeating headers and footers
 Remove all repeating company headers, addresses, signature blocks, and page dividers, such as:
 "MARINI S.R.L.
@@ -62,3 +78,4 @@ Additional conversion rules
 
 !IMPORTANT EXCEPTION: Do NOT convert standard industry sizes/fittings that use inches, such as 3/4-inch, 3/8", 2", or standard DTH hammer designations like "3-inch" or "3\"". These must remain in their original inch format.
 !IMPORTANT: dont summarize any items, itm names, quantities, descriptions, prices or similar make sure they are as is, as in the original OCR output
+!IMPORTANT: never use em dashes (—), also dont use markdown - that is dont use ** number here ** example: "**70 – 310 mm**"" should simply be "70 - 310 mm"
