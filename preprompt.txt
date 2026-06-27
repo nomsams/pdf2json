@@ -79,3 +79,7 @@ Additional conversion rules
 !IMPORTANT EXCEPTION: Do NOT convert standard industry sizes/fittings that use inches, such as 3/4-inch, 3/8", 2", or standard DTH hammer designations like "3-inch" or "3\"". These must remain in their original inch format.
 !IMPORTANT: dont summarize any items, itm names, quantities, descriptions, prices or similar make sure they are as is, as in the original OCR output
 !IMPORTANT: never use em dashes (—), also dont use markdown - that is dont use ** number here ** example: "**70 – 310 mm**"" should simply be "70 - 310 mm"
+
+
+!IMPORTANT only use - as a dash and NEVER the —
+!IMPORTANT write out where the optional items begin by tracking where the total price is written out and hence the the items below are optional then write out OPTIONAL under that before the optional items start
