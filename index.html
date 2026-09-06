@@ -548,6 +548,7 @@ CORRECT FORMAT FOR DESCRIPTIONS: "- Variable track width...<br>- Track wheel bas
           <div class="btn-row">
             <button id="btnTransFromGroq">Use Groq Output</button>
             <button id="btnTransUpload">Upload JSON</button>
+            <button id="btnCopyFullTransPrompt" title="Copy the translation instructions and current Step 2 Groq JSON">Copy Full Prompt</button>
             <input type="file" id="transFile" accept=".json,.txt,application/json" style="display:none">
           </div>
         </div>
@@ -779,6 +780,7 @@ const ui = {
   btnRevertTrans: document.getElementById('btnRevertTrans'),
   btnTransRun: document.getElementById('btnTransRun'),
   btnTransFromGroq: document.getElementById('btnTransFromGroq'),
+  btnCopyFullTransPrompt: document.getElementById('btnCopyFullTransPrompt'),
   btnTransUpload: document.getElementById('btnTransUpload'),
   transFile: document.getElementById('transFile'),
   btnTransDownload: document.getElementById('btnTransDownload'),
@@ -1041,6 +1043,60 @@ function prettyPrintJson(raw) {
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch(e) { return raw; }
 }
 
+const TRANSLATION_PROMPT_REMINDER = `### CRITICAL RULE 1: FULL JSON OUTPUT (NO TRUNCATION) ###
+You MUST output the ENTIRE JSON structure from beginning to end. Do not stop early. Do not omit, skip, or summarize the items, optionalItems, terms, infoImages, or signature arrays/objects. Even if a section requires no translation, you MUST copy it into the output exactly as it appears. The final output must be a complete, valid JSON matching the input structure 1:1.
+
+### CRITICAL RULE 2: VALID JSON SYNTAX ###
+The input JSON may contain literal line breaks inside the string values. You must ensure the output is 100% valid JSON. Replace any literal unescaped line breaks inside strings with either a space or a proper <br> tag so that the JSON structure does not break.
+
+Translation Rules & Constraints:
+
+Targeted Keys Only: Modify ONLY the text inside the following keys for translation: reference, name (inside items, subItems, and optionalItems), itemDescription (inside items, subItems, and optionalItems), content (inside infoImages), the empty key "" (inside the quote object), and the strings within the terms array.
+
+Do Not Translate: Do not translate JSON structural keys, company names, addresses (e.g., the line1 key), or currency codes. Copy them exactly as they are.`;
+
+function getTranslationSourceNote(rawJson) {
+  let supplier = '';
+
+  try {
+    const parsed = JSON.parse(rawJson);
+    supplier = [parsed?.quote?.supplier, parsed?.companyB?.name]
+      .filter(value => typeof value === 'string')
+      .join(' ');
+  } catch(e) {
+    const match = rawJson.match(/"supplier"\s*:\s*"([^"]+)"/i);
+    supplier = match ? match[1] : '';
+  }
+
+  const normalizedSupplier = supplier
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalizedSupplier.includes('marini')) {
+    return 'Note: Consider that the original text is written in English by an Italian native speaker with a moderate English level (Italian mother tongue). Interpret non-native phrasing in context while preserving the intended technical and commercial meaning.';
+  }
+  if (/jean[\s-]*lutz/.test(normalizedSupplier)) {
+    return 'Note: Consider that the original text is written in English by a native French speaker (French mother tongue). Interpret non-native phrasing in context while preserving the intended technical and commercial meaning.';
+  }
+  if (/\btei\b/.test(normalizedSupplier)) {
+    return 'Note: Consider that the original text is written in American English. Preserve the intended technical and commercial meaning while localizing the translated wording for Swedish readers.';
+  }
+  if (normalizedSupplier.includes('hany')) {
+    return 'Note: Consider that the original text is written in English by a native German speaker (German mother tongue). Interpret non-native phrasing in context while preserving the intended technical and commercial meaning.';
+  }
+
+  return 'Note: The source text may have been written by a non-native English speaker. Interpret awkward phrasing in context while preserving the intended technical and commercial meaning.';
+}
+
+function buildFullTranslationPrompt(rawJson) {
+  const basePrompt = ui.transPromptInput.value.trim();
+  const structuredJson = prettyPrintJson(rawJson);
+  const sourceNote = getTranslationSourceNote(rawJson);
+
+  return `${basePrompt}\n\nHere is the JSON you need to translate:\n\n${structuredJson}\n\n${TRANSLATION_PROMPT_REMINDER}\n\n${sourceNote}`;
+}
+
 function highlightPlaceholders(text) {
   if(!text) return '';
   let safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -1130,6 +1186,7 @@ ui.fileIn.addEventListener('change', e => handleFile(e.target.files[0]));
 
 function handleFile(f) {
   if(!f || f.type !== 'application/pdf') return alert("PDF only");
+  resetWorkflowForNewFile();
   state.file = f;
   ui.drop.innerHTML = `<strong>${f.name}</strong><br>${(f.size/1024/1024).toFixed(2)} MB`;
   ui.btn1.disabled = false;
@@ -1142,12 +1199,14 @@ ui.btn1.addEventListener('click', async () => {
   ui.btnCancel1.disabled = false;
   state.aborts.step1 = new AbortController();
   const signal = state.aborts.step1.signal;
+  const sourceFile = state.file;
   const mode = ui.extractMode.value;
 
   try {
     log("Starting Image Extraction...", "INFO");
     setProgress(1, 5, "Scanning Images...");
-    await extractImagesFromPDF(state.file, signal);
+    await extractImagesFromPDF(sourceFile, signal);
+    if(signal.aborted || state.file !== sourceFile) throw new Error("Aborted");
     
     // Smart Selection Logic
     const smart = ui.smartSelect.classList.contains('on');
@@ -1174,11 +1233,15 @@ ui.btn1.addEventListener('click', async () => {
     if (mode === 'local') {
       log("Starting Local Layout Analysis...", "INFO");
       setProgress(1, 30, "Analyzing Layout...");
-      state.layoutData = await runLocalPDFProcessing(state.file, signal);
+      const layoutData = await runLocalPDFProcessing(sourceFile, signal);
+      if(signal.aborted || state.file !== sourceFile) throw new Error("Aborted");
+      state.layoutData = layoutData;
     } else {
       log("Starting DeepSeek OCR...", "INFO");
       setProgress(1, 30, "Negotiating OCR...");
-      state.rawDeepSeekText = await runDeepSeekOCR(state.file, signal);
+      const rawDeepSeekText = await runDeepSeekOCR(sourceFile, signal);
+      if(signal.aborted || state.file !== sourceFile) throw new Error("Aborted");
+      state.rawDeepSeekText = rawDeepSeekText;
     }
     
     updateMarkdownOutput();
@@ -1204,6 +1267,9 @@ ui.btnCancel1.addEventListener('click', () => {
 });
 
 function resetStep1() {
+  state.assets.forEach(asset => {
+    if(asset.url) URL.revokeObjectURL(asset.url);
+  });
   state.assets = [];
   state.selectedImageIds.clear();
   state.layoutData = [];
@@ -1216,9 +1282,46 @@ function resetStep1() {
   setProgress(1, 0, "Starting...");
 }
 
+function resetWorkflowForNewFile() {
+  if(state.aborts.step1) state.aborts.step1.abort();
+  state.aborts.step1 = null;
+
+  resetStep1();
+  state.preProcessOutput = "";
+  state.groqJson = "";
+  state.originalGroqJson = "";
+  state.finalJson = null;
+  state.transInputRaw = "";
+  state.transOutputRaw = "";
+  state.originalTransOutputRaw = "";
+  state.transSourceName = "";
+  state.step2Done = false;
+  state.step3Done = false;
+  state.step4Done = false;
+
+  ui.preProcessOutput.value = "";
+  ui.jsonOut.value = "";
+  ui.transInputPreview.textContent = "";
+  ui.transOutputPreview.value = "";
+  ui.finalOut.textContent = "";
+  ui.btn2.disabled = true;
+  ui.btn3.disabled = true;
+
+  setProgress(2, 0, "Idle");
+  setTransProgress(0, "Idle");
+  setProgress(3, 0, "Idle");
+  updateLiveGroqPreview();
+  drawFlow();
+}
+
+function loadPdfDocument(data) {
+  // Disable PDF.js dynamic evaluation to mitigate CVE-2024-4367 on the legacy build.
+  return pdfjsLib.getDocument({ data, isEvalSupported: false }).promise;
+}
+
 async function extractImagesFromPDF(file, signal) {
   const buf = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument(buf).promise;
+  const pdf = await loadPdfDocument(buf);
   
   for (let i = 1; i <= pdf.numPages; i++) {
     if(signal.aborted) throw new Error("Aborted");
@@ -1256,14 +1359,14 @@ async function extractImagesFromPDF(file, signal) {
           const pdfY = m[3] + m[5]; 
           const pt = viewport.convertToViewportPoint(pdfX, pdfY);
           const yPos = pt[1]; 
-          await processImage(imgObj, i, m, yPos);
+          await processImage(imgObj, i, m, yPos, signal);
         }
       }
     }
   }
 }
 
-async function processImage(imgObj, pageNum, matrix, yPos) {
+async function processImage(imgObj, pageNum, matrix, yPos, signal) {
   if(imgObj.width < 50 || imgObj.height < 50) return; 
 
   const canvas = document.createElement('canvas');
@@ -1297,6 +1400,7 @@ async function processImage(imgObj, pageNum, matrix, yPos) {
   for(let k=0; k<rowData.length; k+=4) hash += rowData[k].toString(16);
 
   const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  if(signal?.aborted) return;
   const url = URL.createObjectURL(blob);
   const id = `p${pageNum}_${state.assets.length+1}`;
   
@@ -1379,7 +1483,7 @@ function updateMarkdownOutput() {
 
 async function runLocalPDFProcessing(file, signal) {
   const buf = await file.arrayBuffer();
-  const doc = await pdfjsLib.getDocument(buf).promise;
+  const doc = await loadPdfDocument(buf);
   const total = doc.numPages;
   let layoutData = [];
 
@@ -2172,6 +2276,27 @@ async function translateWithGroq(jsonStr, prompt, model, reasoningEffort, key, u
 }
 
 // Translation UI wiring
+ui.btnCopyFullTransPrompt.addEventListener('click', async () => {
+  const currentGroqJson = ui.jsonOut.value.trim();
+  if (!currentGroqJson) {
+    alert("No Groq output available yet. Run Step 2 first.");
+    return;
+  }
+
+  const fullPrompt = buildFullTranslationPrompt(currentGroqJson);
+
+  try {
+    await navigator.clipboard.writeText(fullPrompt);
+    const originalText = ui.btnCopyFullTransPrompt.textContent;
+    ui.btnCopyFullTransPrompt.textContent = "Copied!";
+    setTimeout(() => { ui.btnCopyFullTransPrompt.textContent = originalText; }, 1500);
+    log("Copied full translation prompt with the current Groq JSON.", "SUCCESS");
+  } catch(e) {
+    log("Could not copy the full translation prompt: " + e.message, "ERR");
+    alert("Clipboard access failed. Please allow clipboard access and try again.");
+  }
+});
+
 ui.btnTransFromGroq.addEventListener('click', () => {
   const currentGroqJson = ui.jsonOut.value;
   if (!currentGroqJson) { alert("No Groq output available yet. Run Step 2 first."); return; }
