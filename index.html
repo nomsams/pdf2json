@@ -2452,8 +2452,13 @@ ui.btn3.addEventListener('click', async () => {
 
     const usedImageIds = new Set();
 
-    const isPlaceholder = (str) => typeof str === 'string' && str.startsWith(CONFIG.phPrefix) && str.endsWith(CONFIG.phSuffix);
-    const extractId = (ph) => ph.replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|')[0];
+    const placeholderPattern = /\{\{IMG:[^}]+\}\}/g;
+    const isPlaceholder = (str) => typeof str === 'string' && /^\{\{IMG:[^}]+\}\}$/.test(str.trim());
+    const extractId = (ph) => ph.trim().replace(CONFIG.phPrefix, '').replace(CONFIG.phSuffix, '').split('|')[0];
+    const findSelectedAsset = (id) => {
+      if(!state.selectedImageIds.has(id)) return null;
+      return state.assets.find(a => a.id === id) || null;
+    };
 
     const processNode = async (node, parentKey = null) => {
       if (Array.isArray(node)) {
@@ -2463,11 +2468,11 @@ ui.btn3.addEventListener('click', async () => {
       else if (typeof node === 'object' && node !== null) {
         if (node.type === 'text' && isPlaceholder(node.content)) {
             const id = extractId(node.content);
-            const asset = state.assets.find(a => a.id === id);
+            const asset = findSelectedAsset(id);
             if (asset) {
                 usedImageIds.add(id);
                 const b64 = await compressImage(asset.blob, true, quality, maxW);
-                return { type: 'image', src: b64, width: asset.width, description: '', compressionImmune: false, centering: node.centering || 'default' };
+                return { type: 'image', src: b64, width: dispW || asset.width, description: '', compressionImmune: false, centering: node.centering || 'default' };
             }
         }
 
@@ -2480,16 +2485,29 @@ ui.btn3.addEventListener('click', async () => {
       else if (typeof node === 'string') {
         if (isPlaceholder(node)) {
             const id = extractId(node);
-            const asset = state.assets.find(a => a.id === id);
+            const asset = findSelectedAsset(id);
             if (asset) {
-                usedImageIds.add(id);
-                const b64 = await compressImage(asset.blob, true, quality, maxW);
                 const isSource = parentKey && ['src', 'url', 'href', 'data'].includes(parentKey.toLowerCase());
-                
-                if (isSource) return b64;
-                else return { type: 'image', src: b64, width: asset.width, description: '', compressionImmune: false, centering: 'default' };
+
+                if (isSource) {
+                  usedImageIds.add(id);
+                  return await compressImage(asset.blob, true, quality, maxW);
+                }
+
+                // A standalone marker outside an image source is a routing marker.
+                // Remove it here and append the selected asset to infoImages below.
+                return '';
             }
             return node; 
+        }
+
+        if (containsImgPlaceholder(node)) {
+          // Translation tools often preserve image markers inside longer HTML strings.
+          // Consume selected markers so their assets can be routed to infoImages.
+          return node.replace(placeholderPattern, (placeholder) => {
+            const id = extractId(placeholder);
+            return findSelectedAsset(id) ? '' : placeholder;
+          });
         }
         return node;
       }
@@ -2503,21 +2521,19 @@ ui.btn3.addEventListener('click', async () => {
     const unusedAssets = validAssets.filter(a => !usedImageIds.has(a.id));
     
     if(unusedAssets.length > 0) {
-      log(`Injecting ${unusedAssets.length} missing images into Info...`, "WARN");
-      
-      if(!processedJson.Info) processedJson.Info = {};
-      
-      let targetArray = null;
-      if(Array.isArray(processedJson.Info.Images)) targetArray = processedJson.Info.Images;
-      else if(Array.isArray(processedJson.Info.Bilder)) targetArray = processedJson.Info.Bilder;
-      else {
-        processedJson.Info.Images = [];
-        targetArray = processedJson.Info.Images;
+      log(`Injecting ${unusedAssets.length} selected images into infoImages...`, "WARN");
+
+      if(Array.isArray(processedJson.infoImages)) {
+        // Keep the existing section and append selected images in extraction order.
+      } else if(processedJson.infoImages && typeof processedJson.infoImages === 'object') {
+        processedJson.infoImages = [processedJson.infoImages];
+      } else {
+        processedJson.infoImages = [];
       }
 
       for(const asset of unusedAssets) {
         const b64 = await compressImage(asset.blob, true, quality, maxW);
-        targetArray.push({ type: 'image', src: b64, width: asset.width, description: '', compressionImmune: false, centering: 'default' });
+        processedJson.infoImages.push({ type: 'image', src: b64, width: dispW || asset.width, description: '', compressionImmune: false, centering: 'default' });
       }
     }
 
